@@ -42,6 +42,12 @@ services:
     depends_on:
       mlflow_db:
         condition: service_healthy
+    environment:
+      # Comma-separated list of URL schemes allowed for model provider API bases.
+      # MLflow splits this list automatically.
+      MLFLOW_GATEWAY_API_BASE_ALLOWED_SCHEMES: ${MLFLOW_GATEWAY_API_BASE_ALLOWED_SCHEMES:-https}
+      # Set to "true" to allow provider API bases that resolve to private network IPs.
+      MLFLOW_GATEWAY_API_BASE_ALLOW_PRIVATE_IPS: ${MLFLOW_GATEWAY_API_BASE_ALLOW_PRIVATE_IPS:-false}
     command: >
       mlflow server
       --backend-store-uri postgresql://${MLFLOW_DB_USER:?set MLFLOW_DB_USER in the environment}:${MLFLOW_DB_PASSWORD:?set MLFLOW_DB_PASSWORD in the environment}@mlflow_db:5433/${MLFLOW_DB_NAME:-mlflow}
