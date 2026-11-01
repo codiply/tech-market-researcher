@@ -1,0 +1,4 @@
+# Environment files (secrets) — ignores .env anywhere in the repo,
+# but always tracks the template
+.env
+!.env.example
