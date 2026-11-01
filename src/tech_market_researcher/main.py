@@ -35,7 +35,7 @@ def main() -> None:
     tracking_uri = os.environ[TRACKING_URI_ENV].rstrip("/")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(os.environ[EXPERIMENT_ENV])
-    mlflow.set_active_model(name=f"tech-market-researcher-v{__version__}".replace(".", "-"))
+    mlflow.set_active_model(name=f"tech-market-researcher-v{__version__}".replace(".", "_"))
 
     llm = ChatOpenAI(
         model=MODEL,

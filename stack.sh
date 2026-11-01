@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stack helper — wraps `docker compose` for this repo.
-# Usage: ./stack.sh <up|down|ps|logs|restart|pull> [extra args...]
+# Usage: ./stack.sh <up|down|ps|logs|restart|pull|build> [extra args...]
 set -euo pipefail
 
 COMPOSE_FILE="$(dirname "$(readlink -f "$0")")/docker/docker-compose.yml"
@@ -14,9 +14,10 @@ fi
 
 cmd="${1:-}"
 if [[ -z "$cmd" ]]; then
-  echo "Usage: $0 <up|down|ps|logs|restart|pull> [extra args...]" >&2
+  echo "Usage: $0 <up|down|ps|logs|restart|pull|build> [extra args...]" >&2
   echo "Examples:" >&2
   echo "  $0 up -d        # start the stack, then provision the MLflow gateway" >&2
+  echo "  $0 build        # build (or rebuild) the local images" >&2
   echo "  $0 down         # stop and remove containers" >&2
   echo "  $0 ps           # show container status" >&2
   echo "  $0 logs -f      # tail logs" >&2
@@ -31,11 +32,12 @@ shift
 #   minio      -> uid 100 (minio user in the alpine/minio mirror image;
 #                 note: the official minio/minio image uses uid 1001)
 #   mlflow_db  -> uid 999  (postgres user)
+#   pgadmin    -> uid 5050 (pgadmin user in the dpage/pgadmin4 image; gid 0)
 ensure_storage_dirs() {
-  local -A owners=( [minio]=100 [mlflow_db]=999 )
-  local -A groups=( [minio]=101 [mlflow_db]=999 )
+  local -A owners=( [minio]=100 [mlflow_db]=999 [pgadmin]=5050 )
+  local -A groups=( [minio]=101 [mlflow_db]=999 [pgadmin]=0 )
   local dir path uid
-  for dir in minio mlflow_db; do
+  for dir in minio mlflow_db pgadmin; do
     path="$ROOT/storage/$dir"
     uid="${owners[$dir]}"
     mkdir -p "$path"
@@ -91,6 +93,9 @@ case "$cmd" in
     docker compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" "$cmd" "$@"
     bootstrap
     exit $?
+    ;;
+  build)
+    docker compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" build "$@"
     ;;
 esac
 

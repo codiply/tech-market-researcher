@@ -19,13 +19,13 @@ services:
       timeout: 5s
       retries: 5
 
-  fix_perms:
+  permissions_fixer:
     build:
-      context: ./fix_perms
-    image: tech-market-researcher/fix-perms:local
-    container_name: fix_perms
+      context: ./permissions_fixer
+    image: tech-market-researcher/permissions-fixer:local
+    container_name: permissions_fixer
     environment:
-      TARGET_DIRS: "/mlflow_db /minio"
+      TARGET_DIRS: "/mlflow_db /minio /pgadmin"
       CRON_SCHEDULE: "*/1 * * * *"
     depends_on:
       mlflow_db:
@@ -35,6 +35,7 @@ services:
     volumes:
       - ../storage/mlflow_db:/mlflow_db
       - ../storage/minio:/minio
+      - ../storage/pgadmin:/pgadmin
     restart: "no"
 
   minio:
@@ -47,8 +48,10 @@ services:
     container_name: minio
     command: server /data --console-address ":9001"
     environment:
+      # MinIO requires a root password (min 8 chars); login cannot be
+      # disabled, so use this fixed, documented default for local dev.
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-mlflow}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in the environment}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio12345}
     ports:
       - "9000:9000"   # S3 API
       - "9001:9001"   # web console
@@ -62,6 +65,38 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  pgadmin:
+    # Web UI for the MLflow Postgres database. pgAdmin requires a login
+    # (login cannot be disabled), so this uses a fixed, documented local
+    # default; override with PGADMIN_PASSWORD if you prefer.
+    # The mlflow_db server is pre-configured with the .env credentials:
+    # entrypoint.sh renders the server list before the real entrypoint runs,
+    # and the image loads it at startup.
+    image: dpage/pgadmin4:9.19
+    container_name: pgadmin
+    entrypoint: ["/pgadmin-init/entrypoint.sh"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-pgadmin12345}
+      # Passed through so entrypoint.sh can render the pre-configured server list.
+      MLFLOW_DB_USER: ${MLFLOW_DB_USER:-mlflow}
+      MLFLOW_DB_PASSWORD: ${MLFLOW_DB_PASSWORD:?set MLFLOW_DB_PASSWORD in the environment}
+      MLFLOW_DB_NAME: ${MLFLOW_DB_NAME:-mlflow}
+      # Rendered by entrypoint.sh at container start.
+      PGADMIN_SERVER_JSON_FILE: /tmp/servers.json
+      # Display name of the pre-configured server in the pgAdmin UI.
+      PGADMIN_SERVER_NAME: "MLflow (Postgres)"
+    depends_on:
+      mlflow_db:
+        condition: service_healthy
+    ports:
+      - "5050:80"
+    volumes:
+      # Host folder, ignored by git via storage/.gitignore
+      - ../storage/pgadmin:/var/lib/pgadmin
+      # Entrypoint wrapper that renders the pre-configured server list.
+      - ./pgadmin:/pgadmin-init
 
   mlflow_server:
     build:
