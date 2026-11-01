@@ -25,14 +25,43 @@ services:
     image: tech-market-researcher/fix-perms:local
     container_name: fix_perms
     environment:
-      TARGET_DIRS: "/data"
+      TARGET_DIRS: "/mlflow_db /minio"
       CRON_SCHEDULE: "*/1 * * * *"
     depends_on:
       mlflow_db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
-      - ../storage/mlflow_db:/data
+      - ../storage/mlflow_db:/mlflow_db
+      - ../storage/minio:/minio
     restart: "no"
+
+  minio:
+    # S3-compatible object storage for MLflow artifacts. Data lives in its own
+    # host folder (storage/minio), visible directly, separate from the old
+    # mlflow_artifacts path.
+    # NOTE: minio/minio is unavailable on Docker Hub from this network;
+    # alpine/minio is a mirror of the official image. Pinned to a release tag.
+    image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-mlflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in the environment}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      # Host folder, ignored by git via storage/.gitignore
+      - ../storage/minio:/data
+    # The alpine/minio image has no standalone curl; busybox wget probes the
+    # S3 liveness endpoint.
+    healthcheck:
+      test: ["CMD-SHELL", "busybox wget -qO- http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   mlflow_server:
     build:
@@ -42,7 +71,15 @@ services:
     depends_on:
       mlflow_db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
+      # Artifacts are stored in MinIO (S3-compatible). With --serve-artifacts
+      # clients upload via this server's REST API, so nothing on the host
+      # needs S3 credentials or access to a local artifact path.
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-mlflow}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in the environment}
       # Comma-separated list of URL schemes allowed for model provider API bases.
       # MLflow splits this list automatically.
       MLFLOW_GATEWAY_API_BASE_ALLOWED_SCHEMES: ${MLFLOW_GATEWAY_API_BASE_ALLOWED_SCHEMES:-https}
@@ -51,11 +88,9 @@ services:
     command: >
       mlflow server
       --backend-store-uri postgresql://${MLFLOW_DB_USER:?set MLFLOW_DB_USER in the environment}:${MLFLOW_DB_PASSWORD:?set MLFLOW_DB_PASSWORD in the environment}@mlflow_db:5433/${MLFLOW_DB_NAME:-mlflow}
-      --default-artifact-root file:///data/mlartifacts
+      --default-artifact-root s3://mlflow-artifacts
+      --serve-artifacts
       --host 0.0.0.0
       --port 5000
     ports:
       - "5000:5000"
-    volumes:
-      # Host folder, ignored by git via storage/.gitignore
-      - ../storage/mlflow_artifacts:/data/mlartifacts

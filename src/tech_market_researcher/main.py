@@ -12,18 +12,17 @@ from deepagents import create_deep_agent
 from rich.console import Console
 import mlflow
 
-BASE_URL_ENV = "OPENAI_BASE_URL"
-API_KEY_ENV = "OPENAI_API_KEY"
 TRACKING_URI_ENV = "MLFLOW_TRACKING_URI"
 EXPERIMENT_ENV = "MLFLOW_EXPERIMENT"
-REQUIRED_ENVS = [BASE_URL_ENV, API_KEY_ENV, TRACKING_URI_ENV, EXPERIMENT_ENV]
+REQUIRED_ENVS = [TRACKING_URI_ENV, EXPERIMENT_ENV]
 MODEL = "Qwen3.8-27B-oQ4e-mtp"
+# The agent talks to the MLflow AI Gateway, which proxies to the oMLX server.
+# The endpoint name must match what scripts/bootstrap.py created.
+GATEWAY_ENDPOINT = "oMLX"
 __version__ = version("tech-market-researcher")
 
 # Enable auto-tracing for LangChain (and LangGraph-based frameworks like Deep Agent)
 mlflow.langchain.autolog()
-
-mlflow.set_active_model(name=f"tech-market-researcher-v{__version__}".replace(".", "-"))
 
 console = Console()
 
@@ -33,13 +32,16 @@ def main() -> None:
         print(f"Set {', '.join(missing)} to run the agent.")
         return
 
-    mlflow.set_tracking_uri(os.environ[TRACKING_URI_ENV])
+    tracking_uri = os.environ[TRACKING_URI_ENV].rstrip("/")
+    mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(os.environ[EXPERIMENT_ENV])
+    mlflow.set_active_model(name=f"tech-market-researcher-v{__version__}".replace(".", "-"))
 
     llm = ChatOpenAI(
         model=MODEL,
-        base_url=os.environ[BASE_URL_ENV],
-        api_key=os.environ[API_KEY_ENV],
+        base_url=f"{tracking_uri}/gateway/proxy/{GATEWAY_ENDPOINT}/v1",
+        # The gateway does not validate API keys; a dummy value is fine.
+        api_key="dummy",
     )
 
     agent = create_deep_agent(

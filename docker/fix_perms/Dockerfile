@@ -4,7 +4,7 @@
 # should keep read access.
 #
 # In compose, set TARGET_DIRS to a space-separated list of mount paths
-# (e.g. "/data /artifacts") and CRON_SCHEDULE to a standard cron
+# (e.g. "/mlflow_db /mlflow_artifacts") and CRON_SCHEDULE to a standard cron
 # expression (default: every minute).
 FROM alpine:3
 

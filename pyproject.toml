@@ -12,7 +12,8 @@ dependencies = [
     "langchain-openai~=1.7.2",
     "rich~=15.0.0",
     "mlflow~=3.17.2",
-    "python-dotenv>=1.2.4",
+    "python-dotenv~=1.2.4",
+    "boto3~=1.43",
 ]
 
 [project.scripts]
