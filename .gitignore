@@ -2,3 +2,11 @@
 # but always tracks the template
 .env
 !.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/

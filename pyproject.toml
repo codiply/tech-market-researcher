@@ -1,0 +1,23 @@
+[project]
+name = "tech-market-researcher"
+version = "0.1.0"
+description = "Tech market researcher agent"
+readme = "README.md"
+authors = [
+    { name = "Panagiotis Katsaroumpas", email = "codiply@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "deepagents~=0.7.32",
+    "langchain-openai~=1.7.2",
+    "rich~=15.0.0",
+    "mlflow~=3.17.2",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+agent = "tech_market_researcher.main:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
