@@ -1,8 +1,9 @@
 # pre-commit configuration.
 #
-# The four tools are managed by uv (see the `dev` dependency group in
+# The four local tools are managed by uv (see the `dev` dependency group in
 # pyproject.toml) and run from the project's .venv, so mypy can resolve the
-# project's own dependencies.
+# project's own dependencies. gitleaks is fetched by pre-commit as its own
+# binary.
 #
 # Install (once per clone):
 #   uv tool install pre-commit
@@ -41,3 +42,33 @@ repos:
         language: system
         types: [python]
         require_serial: true
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.0
+    hooks:
+      - id: gitleaks
+        description: "Scan for secrets"
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+        description: "Ensure files end with a single newline"
+      - id: trailing-whitespace
+        description: "Strip trailing whitespace"
+      - id: check-yaml
+        description: "Check YAML syntax"
+      - id: check-json
+        description: "Check JSON syntax"
+      - id: check-toml
+        description: "Check TOML syntax"
+      - id: check-added-large-files
+        description: "Block accidentally committed large files"
+      - id: check-merge-conflict
+        description: "Catch leftover merge conflict markers"
+      - id: detect-private-key
+        description: "Catch committed private keys"
+      - id: mixed-line-ending
+        description: "Prevent mixed line endings"
+      - id: check-shebang-scripts-are-executable
+        description: "Shebang scripts must be executable"

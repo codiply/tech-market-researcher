@@ -60,4 +60,3 @@ git commit --no-verify -m "emergency save"
 ```
 
 This commits exactly what you have without running any of the checks. Fix the lint/type issues later with a normal commit.
-
