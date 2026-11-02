@@ -16,12 +16,15 @@ Usage:
 import os
 import sys
 
+import boto3
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000").rstrip("/")
+TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000").rstrip(
+    "/"
+)
 BASE = f"{TRACKING_URI}/api/3.0/mlflow/gateway"
 TIMEOUT = 30  # seconds
 
@@ -57,7 +60,7 @@ MODELS: list[tuple[str, str]] = [
 
 
 class BootstrapError(RuntimeError):
-    pass
+    """Raised when the MLflow stack is unreachable or in an inconsistent state."""
 
 
 # ---------------------------------------------------------------------------
@@ -67,8 +70,6 @@ class BootstrapError(RuntimeError):
 
 def ensure_bucket(bucket: str, endpoint: str) -> None:
     """Create the artifact bucket if it does not exist (idempotent)."""
-    import boto3
-
     s3 = boto3.client(
         "s3",
         endpoint_url=endpoint,
@@ -99,7 +100,9 @@ def _call(method, path, *, params=None, body=None, allow_404=False):
             method, url, params=params, json=body, auth=AUTH, timeout=TIMEOUT
         )
     except requests.ConnectionError as e:
-        raise BootstrapError(f"Cannot reach MLflow server at {TRACKING_URI}: {e}") from e
+        raise BootstrapError(
+            f"Cannot reach MLflow server at {TRACKING_URI}: {e}"
+        ) from e
     except requests.Timeout as e:
         raise BootstrapError(f"Timed out calling {url}") from e
 
@@ -132,6 +135,7 @@ def ensure_secret(name, provider, secret_value, auth_config=None):
 
 
 def ensure_model_definition(name, secret_id, provider, model_name):
+    """Create or reuse a model definition, re-linking it if it points at another secret."""
     listing = _call("GET", "model-definitions/list", params={"provider": provider})
     for md in listing.get("model_definitions", []):
         if md.get("name") == name:
@@ -166,11 +170,13 @@ def ensure_model_definition(name, secret_id, provider, model_name):
 
 
 def ensure_endpoint(name, model_definition_id):
+    """Create or reuse an endpoint, ensuring a PRIMARY link to the given model."""
     for endpoint in _call("GET", "endpoints/list").get("endpoints", []):
         if endpoint.get("name") == name:
             mappings = endpoint.get("model_mappings", [])
             linked = [
-                m for m in mappings
+                m
+                for m in mappings
                 if m.get("model_definition_id") == model_definition_id
                 and m.get("linkage_type") == "PRIMARY"
             ]
@@ -186,7 +192,10 @@ def ensure_endpoint(name, model_definition_id):
                 body={
                     "endpoint_id": endpoint["endpoint_id"],
                     "model_configs": [
-                        {"model_definition_id": model_definition_id, "linkage_type": "PRIMARY"}
+                        {
+                            "model_definition_id": model_definition_id,
+                            "linkage_type": "PRIMARY",
+                        }
                     ],
                 },
             )["endpoint"]
@@ -208,19 +217,27 @@ def verify(secret, model_def, endpoint):
     print("\nVerification:")
     print(f"  secret:            {secret['secret_name']} ({secret['secret_id']})")
     linked = (model_def.get("secret_id") or "none") == secret["secret_id"]
-    print(f"  model definition:  {model_def['name']} -> {model_def.get('secret_id') or 'NO SECRET (broken)'}")
+    print(
+        f"  model definition:  {model_def['name']} -> "
+        f"{model_def.get('secret_id') or 'NO SECRET (broken)'}"
+    )
     primary = [
         m["model_definition_id"]
         for m in endpoint.get("model_mappings", [])
         if m.get("linkage_type") == "PRIMARY"
     ]
-    print(f"  endpoint:          {endpoint['name']} PRIMARY models: {primary or 'NONE (broken)'}")
+    print(
+        f"  endpoint:          {endpoint['name']} PRIMARY models: {primary or 'NONE (broken)'}"
+    )
     if not linked or primary != [model_def["model_definition_id"]]:
-        raise BootstrapError("Verification failed: linkage chain is broken, see details above.")
+        raise BootstrapError(
+            "Verification failed: linkage chain is broken, see details above."
+        )
     print("  OK: secret -> model definition -> endpoint chain is intact.")
 
 
 def main():
+    """Provision the stack and verify the secret -> model -> endpoint linkage."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         sys.exit("Set OPENAI_API_KEY in your environment (or .env) first.")

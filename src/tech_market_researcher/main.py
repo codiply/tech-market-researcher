@@ -1,3 +1,5 @@
+"""Interactive chat agent talking to an MLflow AI Gateway endpoint."""
+
 import os
 from importlib.metadata import version
 
@@ -6,11 +8,16 @@ from dotenv import load_dotenv
 # Load .env from the current directory (real env vars take precedence)
 load_dotenv()
 
-from langchain_openai import ChatOpenAI
-
-from deepagents import create_deep_agent
-from rich.console import Console
+# These imports must run after load_dotenv(): the agent talks to the MLflow
+# AI Gateway, whose settings come from .env (real env vars take precedence).
+# pylint: disable=wrong-import-position
 import mlflow
+from deepagents import create_deep_agent
+from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
+from rich.console import Console
+
+# pylint: enable=wrong-import-position
 
 TRACKING_URI_ENV = "MLFLOW_TRACKING_URI"
 EXPERIMENT_ENV = "MLFLOW_EXPERIMENT"
@@ -26,7 +33,9 @@ mlflow.langchain.autolog()
 
 console = Console()
 
+
 def main() -> None:
+    """Run the interactive chat REPL against the configured gateway endpoint."""
     missing = [name for name in REQUIRED_ENVS if not os.environ.get(name)]
     if missing:
         print(f"Set {', '.join(missing)} to run the agent.")
@@ -35,13 +44,15 @@ def main() -> None:
     tracking_uri = os.environ[TRACKING_URI_ENV].rstrip("/")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(os.environ[EXPERIMENT_ENV])
-    mlflow.set_active_model(name=f"tech-market-researcher-v{__version__}".replace(".", "_"))
+    mlflow.set_active_model(
+        name=f"tech-market-researcher-v{__version__}".replace(".", "_")
+    )
 
     llm = ChatOpenAI(
         model=MODEL,
         base_url=f"{tracking_uri}/gateway/proxy/{GATEWAY_ENDPOINT}/v1",
         # The gateway does not validate API keys; a dummy value is fine.
-        api_key="dummy",
+        api_key=SecretStr("dummy"),
     )
 
     agent = create_deep_agent(
@@ -62,7 +73,7 @@ def main() -> None:
         result = agent.invoke({"messages": messages})
         # Keep the full conversation (incl. the agent's reply) for the next turn
         messages = result["messages"]
-        console.print("[bold cyan]agent>[/bold cyan]", result['messages'][-1].content)
+        console.print("[bold cyan]agent>[/bold cyan]", result["messages"][-1].content)
 
 
 if __name__ == "__main__":

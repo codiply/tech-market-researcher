@@ -11,16 +11,23 @@ server from /tmp/servers.json. Keeps .env as the source of truth: on every
 container start the stored password is (re)encrypted from MLFLOW_DB_PASSWORD
 if it differs.
 """
+
 import os
 import sys
 
 os.chdir("/pgadmin4")
 sys.path.insert(0, "/pgadmin4")
 
-import config  # noqa: E402
-from pgadmin import create_app  # noqa: E402
-from pgadmin.model import db, Server  # noqa: E402
-from pgadmin.utils.crypto import decrypt, encrypt  # noqa: E402
+# These modules only exist inside the pgAdmin container image; the script runs
+# there, after the chdir/sys.path setup above, so the imports cannot resolve
+# in the dev environment.
+# pylint: disable=import-error, wrong-import-position
+import config  # type: ignore[import-not-found]
+from pgadmin import create_app  # type: ignore[import-not-found]
+from pgadmin.model import Server, db  # type: ignore[import-not-found]
+from pgadmin.utils.crypto import decrypt, encrypt  # type: ignore[import-not-found]
+
+# pylint: enable=import-error, wrong-import-position
 
 SERVER_NAME = os.environ.get("PGADMIN_SERVER_NAME", "MLflow (Postgres)")
 db_password = os.environ.get("MLFLOW_DB_PASSWORD", "")
@@ -31,8 +38,7 @@ app.PGADMIN_RUNTIME = False
 with app.test_request_context():
     server = Server.query.filter_by(name=SERVER_NAME).first()
     if server is None:
-        print(f"pgadmin-init: server '{SERVER_NAME}' not found; "
-              "not saving password")
+        print(f"pgadmin-init: server '{SERVER_NAME}' not found; " "not saving password")
         sys.exit(0)
     if not login_password or not db_password:
         print("pgadmin-init: missing login/db password; not saving")
@@ -42,11 +48,13 @@ with app.test_request_context():
     if server.password:
         try:
             stored = decrypt(server.password, login_password).decode()
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Any failure (stale key, non-encrypted value) means "not saved".
             stored = None
     if stored == db_password and server.save_password:
-        print(f"pgadmin-init: database password for '{SERVER_NAME}' "
-              "is already saved")
+        print(
+            f"pgadmin-init: database password for '{SERVER_NAME}' " "is already saved"
+        )
     else:
         server.password = encrypt(db_password, login_password)
         server.save_password = 1

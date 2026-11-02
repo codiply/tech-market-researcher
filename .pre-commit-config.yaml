@@ -1,0 +1,43 @@
+# pre-commit configuration.
+#
+# The four tools are managed by uv (see the `dev` dependency group in
+# pyproject.toml) and run from the project's .venv, so mypy can resolve the
+# project's own dependencies.
+#
+# Install (once per clone):
+#   uv tool install pre-commit
+#   pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black
+        description: "Format code (auto-fixes and re-stages)"
+        entry: .venv/bin/black
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: isort
+        name: isort
+        description: "Sort imports (auto-fixes and re-stages)"
+        entry: .venv/bin/isort
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: mypy
+        name: mypy
+        description: "Type check"
+        entry: .venv/bin/mypy
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: pylint
+        name: pylint
+        description: "Lint"
+        entry: .venv/bin/pylint
+        language: system
+        types: [python]
+        require_serial: true

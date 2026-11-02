@@ -23,3 +23,39 @@ The stack exposes:
 ./stack.sh logs -f mlflow_server   # follow one service
 ./stack.sh down                    # stop and remove containers
 ```
+
+## Pre-commit hooks
+
+The repo uses the [pre-commit](https://pre-commit.com) framework: `.pre-commit-config.yaml` (tracked in git) declares the code-quality checks, and a git hook runs them on every `git commit` against the staged Python files. Formatting tools auto-fix and re-stage any changes; checkers fail the commit on errors.
+
+### Install
+
+Setup is per-clone:
+
+```bash
+uv sync --group dev         # 1. install the checkers into the project venv
+uv tool install pre-commit  # 2. install the pre-commit tool
+pre-commit install          # 3. wire the hook into git (writes .git/hooks/pre-commit)
+```
+
+If `uv tool` is not available, you can install pre-commit manually (e.g. `pip install pre-commit` or `pipx install pre-commit`). The reason pre-commit is installed as a standalone tool rather than added to `pyproject.toml` is that the git hook it generates calls the `pre-commit` binary from your `PATH` on every commit, so it must exist outside the project venv.
+
+### Run the checks manually
+
+```bash
+pre-commit run --all-files   # run all checks on every file
+pre-commit run <id>          # run a single check (ids in .pre-commit-config.yaml)
+```
+
+You can also run any of the checkers in the `dev` group directly, e.g. `uv run <tool> src/`.
+
+### Bypassing the hook in an emergency
+
+If you need to save work fast (e.g. battery about to die and need to push my work) and the checks are blocking you, skip the hook with:
+
+```bash
+git commit --no-verify -m "emergency save"
+```
+
+This commits exactly what you have without running any of the checks. Fix the lint/type issues later with a normal commit.
+
