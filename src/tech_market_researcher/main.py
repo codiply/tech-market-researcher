@@ -1,6 +1,5 @@
 """Interactive chat agent talking to an MLflow AI Gateway endpoint."""
 
-import os
 from importlib.metadata import version
 
 from dotenv import load_dotenv
@@ -11,54 +10,27 @@ load_dotenv()
 # These imports must run after load_dotenv(): the agent talks to the MLflow
 # AI Gateway, whose settings come from .env (real env vars take precedence).
 # pylint: disable=wrong-import-position
-import mlflow
-from deepagents import create_deep_agent
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
 from rich.console import Console
+
+from tech_market_researcher.agents.main import create_agent
+from tech_market_researcher.core.arguments import get_args
+from tech_market_researcher.core.configuration import load_config
+from tech_market_researcher.core.telemetry import setup_telemetry
 
 # pylint: enable=wrong-import-position
 
-TRACKING_URI_ENV = "MLFLOW_TRACKING_URI"
-EXPERIMENT_ENV = "MLFLOW_EXPERIMENT"
-REQUIRED_ENVS = [TRACKING_URI_ENV, EXPERIMENT_ENV]
-MODEL = "Qwen3.8-27B-oQ4e-mtp"
-# The agent talks to the MLflow AI Gateway, which proxies to the oMLX server.
-# The endpoint name must match what scripts/bootstrap.py created.
-GATEWAY_ENDPOINT = "oMLX"
 __version__ = version("tech-market-researcher")
-
-# Enable auto-tracing for LangChain (and LangGraph-based frameworks like Deep Agent)
-mlflow.langchain.autolog()
 
 console = Console()
 
 
 def main() -> None:
     """Run the interactive chat REPL against the configured gateway endpoint."""
-    missing = [name for name in REQUIRED_ENVS if not os.environ.get(name)]
-    if missing:
-        print(f"Set {', '.join(missing)} to run the agent.")
-        return
+    args = get_args()
+    config = load_config(args.config_name)
+    setup_telemetry(__version__)
 
-    tracking_uri = os.environ[TRACKING_URI_ENV].rstrip("/")
-    mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(os.environ[EXPERIMENT_ENV])
-    mlflow.set_active_model(
-        name=f"tech-market-researcher-v{__version__}".replace(".", "_")
-    )
-
-    llm = ChatOpenAI(
-        model=MODEL,
-        base_url=f"{tracking_uri}/gateway/proxy/{GATEWAY_ENDPOINT}/v1",
-        # The gateway does not validate API keys; a dummy value is fine.
-        api_key=SecretStr("dummy"),
-    )
-
-    agent = create_deep_agent(
-        model=llm,
-        system_prompt="You are a helpful assistant.",
-    )
+    agent = create_agent(config)
 
     print("Chat with the agent. Type 'exit' to quit.")
     messages: list = []

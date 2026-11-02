@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+# pylint: skip-file
 """Save the MLflow database password on the pre-configured pgAdmin server.
 
 pgAdmin, in server mode, uses the user's login password as the key to
@@ -21,13 +23,11 @@ sys.path.insert(0, "/pgadmin4")
 # These modules only exist inside the pgAdmin container image; the script runs
 # there, after the chdir/sys.path setup above, so the imports cannot resolve
 # in the dev environment.
-# pylint: disable=import-error, wrong-import-position
-import config  # type: ignore[import-not-found]
-from pgadmin import create_app  # type: ignore[import-not-found]
-from pgadmin.model import Server, db  # type: ignore[import-not-found]
-from pgadmin.utils.crypto import decrypt, encrypt  # type: ignore[import-not-found]
+from pgadmin import create_app
+from pgadmin.model import Server, db
+from pgadmin.utils.crypto import decrypt, encrypt
 
-# pylint: enable=import-error, wrong-import-position
+import config
 
 SERVER_NAME = os.environ.get("PGADMIN_SERVER_NAME", "MLflow (Postgres)")
 db_password = os.environ.get("MLFLOW_DB_PASSWORD", "")
