@@ -2,6 +2,49 @@
 
 > **Built with the [Pi](https://pi.dev/) agent harness** and a [Jundot/Qwen3.8-27B-oQ4e-mtp](https://huggingface.co/Jundot/Qwen3.8-27B-oQ4e-mtp) model (Qwen 3.8, 27B parameters), running locally on an M5 Pro MacBook via [OMLX](https://omlx.ai/). Development was heavily human-steered, with direction given commit by commit.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph agent["Agent"]
+        main["main / supervisor agent"]
+    end
+
+    subgraph docker["Docker (docker compose)"]
+        subgraph mlflow_box["mlflow_server — MLflow"]
+            gateway["AI Gateway<br/>/gateway/mlflow/v1"]
+            traces["Traces from the agent"]
+        end
+        mlflow_db["mlflow_db<br/>Postgres 17"]
+        searxng["searxng<br/>SearXNG metasearch"]
+        valkey["searxng_valkey<br/>Valkey (rate limiting)"]
+        minio["minio<br/>S3 storage (MLflow artifacts)"]
+        pgadmin["pgadmin<br/>Postgres web UI"]
+    end
+
+    macbook["MacBook (M5 Pro)<br/>OMLX server<br/>e.g. Qwen3.8-27B-oQ4e-mtp"]
+    aws["AWS Bedrock<br/>e.g. eu.amazon.nova-2-lite-v1"]
+    tavily["Tavily<br/>search API"]
+    engines["Search engines"]
+
+    main -->|LLM requests| gateway
+    main -->|trace logging| traces
+    main -->|search tool| searxng
+    main -.->|search tool - alternative| tavily
+    gateway -->|local model| macbook
+    gateway -.->|cloud model| aws
+    searxng -->|queries| engines
+    searxng --> valkey
+    mlflow_box -->|backend store| mlflow_db
+    mlflow_box -->|artifacts| minio
+    pgadmin -->|manages| mlflow_db
+```
+
+- **Agent** — an agent built on the LangChain [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent). LLM requests go through the MLflow AI Gateway; every run is traced back to MLflow.
+- **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local OMLX server on the MacBook (default) or AWS Bedrock, and records the agent's traces.
+- **Search** — the agent's search tool uses either the local SearXNG metasearch backend (which fans out to many public search engines) or the Tavily API, one or the other.
+- **Supporting containers** — Postgres (MLflow's backend store), MinIO (artifact storage), and pgAdmin (database UI).
+
 ## Start
 
 ```bash
