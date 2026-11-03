@@ -42,6 +42,12 @@ pre-commit install          # 3. wire the hook into git (writes .git/hooks/pre-c
 
 If `uv tool` is not available, you can install pre-commit manually (e.g. `pip install pre-commit` or `pipx install pre-commit`). The reason pre-commit is installed as a standalone tool rather than added to `pyproject.toml` is that the git hook it generates calls the `pre-commit` binary from your `PATH` on every commit, so it must exist outside the project venv.
 
+### Updating the config
+
+Changes to `.pre-commit-config.yaml` are picked up automatically. Re-run `pre-commit install` only if you change the hook stage/type (e.g. `--hook-type pre-merge-commit`).
+
+Do not install a pre-commit `pre-push` hook here — it would overwrite the custom force-push guard documented below.
+
 ### Run the checks manually
 
 ```bash
@@ -60,3 +66,18 @@ git commit --no-verify -m "emergency save"
 ```
 
 This commits exactly what you have without running any of the checks. Fix the lint/type issues later with a normal commit.
+
+## Pushing to main
+
+This is a personal repo: pushing directly to `main` is allowed and expected — there is no PR workflow. Regular (fast-forward) pushes to `main` and all other branches work normally.
+
+GitHub does not offer branch protection on free accounts, so server-side branch rules (e.g. disallowing force push) cannot be configured. Instead, a local `pre-push` hook guards against the dangerous operations on `main`: **force pushes (non-fast-forward) and deletion of the branch are rejected**, so an accidental `git push --force` or `git push --delete main` can't rewrite or erase published history. Everything else — fast-forward pushes, creating `main`, other branches, deleting feature branches — is unaffected.
+
+### Install the pre-push hook
+
+The hook lives in `scripts/git-hooks/pre-push` (tracked in git). Setup is per-clone, since git hooks are local to each `.git` directory:
+
+```bash
+cp scripts/git-hooks/pre-push .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
