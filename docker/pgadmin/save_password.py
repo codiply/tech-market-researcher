@@ -52,9 +52,7 @@ with app.test_request_context():
             # Any failure (stale key, non-encrypted value) means "not saved".
             stored = None
     if stored == db_password and server.save_password:
-        print(
-            f"pgadmin-init: database password for '{SERVER_NAME}' " "is already saved"
-        )
+        print(f"pgadmin-init: database password for '{SERVER_NAME}' " "is already saved")
     else:
         server.password = encrypt(db_password, login_password)
         server.save_password = 1

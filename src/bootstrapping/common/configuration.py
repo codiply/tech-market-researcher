@@ -31,8 +31,7 @@ class EndpointConfig(BaseModel):
         """MLflow endpoint names allow only letters, numbers, _, -, and ."""
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
             raise ValueError(
-                f"Endpoint name '{name}' may only contain "
-                "letters, numbers, underscores, hyphens, and dots."
+                f"Endpoint name '{name}' may only contain letters, numbers, underscores, hyphens, and dots."
             )
         return name
 
@@ -50,14 +49,10 @@ class LlmConnectionConfig(BaseModel):
     def _check_region_name(self) -> "LlmConnectionConfig":
         """region_name must be set exactly for bedrock connections."""
         if self.provider is LlmProvider.BEDROCK and self.region_name is None:
-            raise ValueError(
-                f"LLM connection '{self.api_key_name}': "
-                "region_name is required for the bedrock provider."
-            )
+            raise ValueError(f"LLM connection '{self.api_key_name}': region_name is required for the bedrock provider.")
         if self.provider is not LlmProvider.BEDROCK and self.region_name is not None:
             raise ValueError(
-                f"LLM connection '{self.api_key_name}': "
-                "region_name is only supported for the bedrock provider."
+                f"LLM connection '{self.api_key_name}': region_name is only supported for the bedrock provider."
             )
         return self
 
@@ -96,9 +91,7 @@ class MlflowConfig(BaseModel):
     @property
     def connections_by_key_name(self) -> dict[str, LlmConnectionConfig]:
         """Connections indexed by api_key_name."""
-        return {
-            connection.api_key_name: connection for connection in self.llm_connections
-        }
+        return {connection.api_key_name: connection for connection in self.llm_connections}
 
 
 class S3Config(BaseModel):

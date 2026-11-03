@@ -50,16 +50,12 @@ class ApplicationConfig(BaseModel):
     model_providers: dict[str, ModelProviderConfig]
     supervisor: SupervisorConfig
 
-    def get_model_connection_details(
-        self, model: ModelConfig
-    ) -> ModelConnectionDetails:
+    def get_model_connection_details(self, model: ModelConfig) -> ModelConnectionDetails:
         """Resolve a model's provider into its full connection details."""
         provider = self.model_providers.get(model.provider)
         if provider is None:
             available = ", ".join(sorted(self.model_providers))
-            raise ValueError(
-                f"Unknown model provider '{model.provider}'. Available: {available}."
-            )
+            raise ValueError(f"Unknown model provider '{model.provider}'. Available: {available}.")
         return ModelConnectionDetails(
             model_name=model.name,
             base_url=provider.base_url,

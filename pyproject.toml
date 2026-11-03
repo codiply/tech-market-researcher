@@ -37,10 +37,15 @@ dev = [
 ]
 
 [tool.black]
+line-length = 120
 target-version = ["py314"]
 
 [tool.isort]
 profile = "black"
+line_length = 120
+
+[tool.pylint."FORMAT"]
+max-line-length = 120
 
 [tool.mypy]
 python_version = "3.14"

@@ -46,18 +46,14 @@ def _find_secret(server_uri: str, name: str) -> dict | None:
 
 def _find_model_definition(server_uri: str, provider: str, name: str) -> dict | None:
     """Return the model definition with the given name for the provider, or None."""
-    listing = _call(
-        server_uri, "GET", "model-definitions/list", params={"provider": provider}
-    )
+    listing = _call(server_uri, "GET", "model-definitions/list", params={"provider": provider})
     for model_def in listing.get("model_definitions", []):
         if model_def.get("name") == name:
             return model_def
     return None
 
 
-def _ensure_model_definition(
-    server_uri: str, name: str, secret_id: str, provider: str, model_name: str
-) -> dict:
+def _ensure_model_definition(server_uri: str, name: str, secret_id: str, provider: str, model_name: str) -> dict:
     """Create or reuse a model definition, re-linking it if it points at another secret."""
     existing = _find_model_definition(server_uri, provider, name)
     if existing is not None:
@@ -99,15 +95,12 @@ def _ensure_endpoint(server_uri: str, name: str, model_definition_id: str) -> di
             linked = [
                 m
                 for m in endpoint.get("model_mappings", [])
-                if m.get("model_definition_id") == model_definition_id
-                and m.get("linkage_type") == "PRIMARY"
+                if m.get("model_definition_id") == model_definition_id and m.get("linkage_type") == "PRIMARY"
             ]
             if linked:
                 logger.info("Endpoint '%s' already exists - reusing.", name)
                 return endpoint
-            logger.info(
-                "Endpoint '%s' has no PRIMARY link to the model - updating.", name
-            )
+            logger.info("Endpoint '%s' has no PRIMARY link to the model - updating.", name)
             # endpoints/update replaces all model linkages when model_configs
             # is provided.
             return _call(
@@ -131,9 +124,7 @@ def _ensure_endpoint(server_uri: str, name: str, model_definition_id: str) -> di
         "endpoints/create",
         body={
             "name": name,
-            "model_configs": [
-                {"model_definition_id": model_definition_id, "linkage_type": "PRIMARY"}
-            ],
+            "model_configs": [{"model_definition_id": model_definition_id, "linkage_type": "PRIMARY"}],
         },
     )["endpoint"]
 
@@ -145,8 +136,7 @@ def _create_models_and_endpoints(server_uri: str, config: BootstrapConfig) -> No
         secret = _find_secret(server_uri, endpoint.api_key_name)
         if secret is None:
             raise BootstrapError(
-                f"LLM connection '{endpoint.api_key_name}' not found; "
-                "create the connections first."
+                f"LLM connection '{endpoint.api_key_name}' not found; " "create the connections first."
             )
         # The provider model id doubles as the definition name; two connections
         # serving the same model id will collide on re-link (last one wins).
@@ -158,9 +148,7 @@ def _create_models_and_endpoints(server_uri: str, config: BootstrapConfig) -> No
             endpoint.model_name,
         )
         _ensure_endpoint(server_uri, endpoint.name, model_def["model_definition_id"])
-        logger.info(
-            "Endpoint '%s' serves model '%s'.", endpoint.name, endpoint.model_name
-        )
+        logger.info("Endpoint '%s' serves model '%s'.", endpoint.name, endpoint.model_name)
 
 
 def _create_llm_connections(server_uri: str, config: BootstrapConfig) -> None:
