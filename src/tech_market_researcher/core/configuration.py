@@ -1,6 +1,7 @@
 """Config models. All classes here are named XxxConfig."""
 
 import os
+from enum import Enum
 from pathlib import Path
 
 import yaml
@@ -38,10 +39,30 @@ class ModelConnectionDetails(BaseModel):
     api_key: SecretStr
 
 
+class SearchProvider(str, Enum):
+    """Available search tool providers."""
+
+    TAVILY = "tavily"
+    SEARXNG = "searxng"
+
+
+class SearchToolConfig(BaseModel):
+    """Search tool settings."""
+
+    provider: SearchProvider
+
+
+class ToolsConfig(BaseModel):
+    """Tool settings."""
+
+    search: SearchToolConfig
+
+
 class SupervisorConfig(BaseModel):
     """Supervisor agent settings."""
 
     model: ModelConfig
+    tools: ToolsConfig
 
 
 class ApplicationConfig(BaseModel):

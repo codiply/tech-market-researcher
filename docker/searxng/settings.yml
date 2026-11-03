@@ -1,0 +1,44 @@
+# SearXNG settings for the local instance (see docker/docker-compose.yml).
+# Mounted read-only on top of /etc/searxng, it REPLACES the settings.yml the
+# container would otherwise generate into storage/searxng_config (that file
+# is shadowed and never loaded; other container-generated runtime files
+# still land in storage/searxng_config).
+# Read the documentation before extending the defaults:
+# https://docs.searxng.org/admin/settings/
+
+use_default_settings: true
+
+server:
+  # Deliberately no secret_key here: it is provided via the SEARXNG_SECRET
+  # environment variable set in docker-compose.yml.
+  # image_proxy is off in the SearXNG defaults; the official container template enables it.
+  image_proxy: true
+
+engines:
+  # Local dev traffic from one IP makes the big aggregators throw CAPTCHAs at
+  # us (visible in the container logs); disable the CAPTCHA-prone engines so
+  # metasearch stays fast and reliable. Everything else uses the defaults.
+  - name: google
+    disabled: true
+  - name: bing
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+
+search:
+  # Enable the JSON API (disabled by default) for programmatic search.
+  formats:
+    - html
+    - json
+  # Pin defaults that would otherwise come from browser cookies.
+  defaults:
+    language: en
+
+outgoing:
+  # Default per-engine request timeout in seconds (the 3.0s default drops
+  # slower engines); each engine's HTTP request uses this unless it defines
+  # its own timeout.
+  request_timeout: 5.0
+  # Hard ceiling for any per-engine timeout; no engine can delay the full
+  # metasearch query by more than this.
+  timeout_max: 10.0

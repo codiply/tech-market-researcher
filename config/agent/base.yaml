@@ -6,3 +6,9 @@ supervisor:
   model:
     provider: mlflow_gateway
     name: omlx.Qwen3.8-27B-oQ4e-mtp
+    # name: bedrock.eu.amazon.nova-2-lite-v1
+
+  tools:
+    search:
+      provider: searxng
+      # provider: tavily
