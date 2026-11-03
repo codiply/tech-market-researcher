@@ -4,6 +4,7 @@ from deepagents import create_deep_agent
 from langchain_openai import ChatOpenAI
 
 from tech_market_researcher.core.configuration import ApplicationConfig
+from tech_market_researcher.tools.search import tavily_search
 
 
 def create_agent(config: ApplicationConfig):
@@ -16,5 +17,6 @@ def create_agent(config: ApplicationConfig):
     )
     return create_deep_agent(
         model=model,
-        system_prompt="You are a helpful assistant.",
+        system_prompt="You are a Researcher giving me insights into the Tech Market.",
+        tools=[tavily_search],
     )

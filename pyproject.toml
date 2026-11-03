@@ -16,6 +16,9 @@ dependencies = [
     "boto3~=1.43.123",
     "pydantic~=2.14.2",
     "pyyaml~=6.0.3",
+    "tavily-python~=0.8.5",
+    "httpx~=0.28.1",
+    "markdownify~=1.2.3",
 ]
 
 [project.scripts]
@@ -49,3 +52,7 @@ max-line-length = 120
 
 [tool.mypy]
 python_version = "3.14"
+
+[[tool.mypy.overrides]]
+module = "tavily"
+ignore_missing_imports = true
