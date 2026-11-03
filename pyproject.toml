@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 agent = "tech_market_researcher.main:main"
+bootstrap = "bootstrapping.main:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]

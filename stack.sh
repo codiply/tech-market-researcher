@@ -75,16 +75,10 @@ except Exception:
   return 1
 }
 
-# Bootstrap the MLflow stack (idempotent; scripts/bootstrap.py loads .env):
-# create the MinIO artifact bucket, then provision the AI Gateway.
-# Expects OPENAI_API_KEY (and optionally OPENAI_BASE_URL) in .env/env.
+# Bootstrap the MLflow stack (idempotent).
 bootstrap() {
-  if [[ -z "${OPENAI_API_KEY:-}" ]] && ! grep -q '^OPENAI_API_KEY=' "$ROOT/.env" 2>/dev/null; then
-    echo "error: OPENAI_API_KEY is not set (env or $ROOT/.env)" >&2
-    return 1
-  fi
   wait_for_mlflow || return 1
-  uv --directory "$ROOT" run python "$ROOT/scripts/bootstrap.py"
+  uv --directory "$ROOT" run bootstrap
 }
 
 case "$cmd" in

@@ -1,0 +1,8 @@
+model_providers:
+  mlflow_gateway:
+    base_url: http://localhost:5000/gateway/mlflow/v1
+
+supervisor:
+  model:
+    provider: mlflow_gateway
+    name: omlx.Qwen3.8-27B-oQ4e-mtp

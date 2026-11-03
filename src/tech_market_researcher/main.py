@@ -32,7 +32,7 @@ def main() -> None:
 
     agent = create_agent(config)
 
-    print("Chat with the agent. Type 'exit' to quit.")
+    console.print("Chat with the agent. Type 'exit' to quit.")
     messages: list = []
     while True:
         user_input = console.input("[bold red]you> [/bold red]").strip()

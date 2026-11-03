@@ -1,0 +1,29 @@
+mlflow:
+  llm_connections:
+    - api_key_name: omlx-server
+      provider: openai
+      api_key_env_var_name: OMLX_API_KEY
+      api_base_url_env_var_name: OMLX_BASE_URL
+    - api_key_name: bedrock-eu
+      provider: bedrock
+      region_name: eu-west-1
+      api_key_env_var_name: BEDROCK_API_KEY
+  endpoints:
+    - name: omlx.Qwen3.8-27B-oQ4e-mtp
+      model_name: Qwen3.8-27B-oQ4e-mtp
+      api_key_name: omlx-server
+    - name: omlx.Qwen3.6-35B-A3B-oQ4e-mtp
+      model_name: Qwen3.6-35B-A3B-oQ4e-mtp
+      api_key_name: omlx-server
+    - name: bedrock.eu.amazon.nova-micro-v1
+      model_name: eu.amazon.nova-micro-v1:0
+      api_key_name: bedrock-eu
+    - name: bedrock.eu.amazon.nova-2-lite-v1
+      model_name: eu.amazon.nova-2-lite-v1:0
+      api_key_name: bedrock-eu
+    - name: bedrock.eu.amazon.nova-pro-v1
+      model_name: eu.amazon.nova-pro-v1:0
+      api_key_name: bedrock-eu
+s3:
+  buckets_to_create:
+    - mlflow-artifacts
