@@ -26,11 +26,13 @@ flowchart LR
     aws["AWS Bedrock<br/>e.g. eu.amazon.nova-2-lite-v1"]
     tavily["Tavily<br/>search API"]
     engines["Search engines"]
+    web["Web pages"]
 
     main -->|LLM requests| gateway
     main -->|trace logging| traces
     main -->|search tool| searxng
     main -.->|search tool - alternative| tavily
+    main -->|fetch_page tool| web
     gateway -->|local model| macbook
     gateway -.->|cloud model| aws
     searxng -->|queries| engines
@@ -42,7 +44,7 @@ flowchart LR
 
 - **Agent** — an agent built on the LangChain [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent). LLM requests go through the MLflow AI Gateway; every run is traced back to MLflow.
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local OMLX server on the MacBook (default) or AWS Bedrock, and records the agent's traces.
-- **Search** — the agent's search tool uses either the local SearXNG metasearch backend (which fans out to many public search engines) or the Tavily API, one or the other.
+- **Search** — the agent's search tool uses either the local SearXNG metasearch backend (which fans out to many public search engines) or the Tavily API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
 - **Supporting containers** — Postgres (MLflow's backend store), MinIO (artifact storage), and pgAdmin (database UI).
 
 ## Start

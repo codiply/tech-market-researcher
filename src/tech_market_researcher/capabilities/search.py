@@ -1,4 +1,7 @@
-"""Web search tools backed by Tavily and a local SearXNG instance."""
+"""Web search tools backed by Tavily and a local SearXNG instance.
+
+These tools only return search results (title, URL, snippet). Fetching full
+page content is a separate capability (see capabilities/webpage.py)."""
 
 import os
 from typing import Annotated, Literal
@@ -10,7 +13,6 @@ from tavily import TavilyClient
 
 from tech_market_researcher.core.configuration import SearchProvider, SearchToolConfig
 from tech_market_researcher.core.constants import SEARXNG_URL
-from tech_market_researcher.core.webpage import fetch_as_markdown
 
 SEARCH_MAX_RESULT_COUNT_DEFAULT = 5
 SEARCH_MAX_RESULT_COUNT_MAX = 25
@@ -22,15 +24,12 @@ def _get_tavily_client() -> TavilyClient:
 
 
 def _format_results(query: str, results: list[dict]) -> str:
-    """Fetch result pages as markdown and format them for the model."""
-    result_texts = []
-    for result in results:
-        url = result["url"]
-        title = result["title"]
-        content = fetch_as_markdown(url)
-        result_texts.append(f"## {title}\n**URL:** {url}\n\n{content}\n---")
-
-    return f"Found {len(result_texts)} result(s) for '{query}':\n\n" + "\n".join(result_texts)
+    """Format search results (title, URL, snippet) for the model."""
+    result_texts = [
+        f"{index}. **{result['title']}**\n   URL: {result['url']}\n   {result.get('content') or ''}".rstrip()
+        for index, result in enumerate(results, start=1)
+    ]
+    return f"Found {len(results)} result(s) for '{query}':\n\n" + "\n\n".join(result_texts)
 
 
 @tool(parse_docstring=True)
@@ -41,7 +40,8 @@ def tavily_search(
 ) -> str:
     """Search the web for information on a given query.
 
-    Uses Tavily to discover relevant URLs, then fetches and returns full webpage content as markdown.
+    Uses Tavily to discover relevant URLs and returns the result titles, URLs
+    and snippets.
 
     Args:
         query: Search query to execute
@@ -49,7 +49,7 @@ def tavily_search(
         topic: Topic filter - 'general', 'news', or 'finance' (default: 'general')
 
     Returns:
-        Formatted search results with full webpage content
+        Numbered search results with title, URL and snippet
     """
     effective_max_results = min(max_results, SEARCH_MAX_RESULT_COUNT_MAX)
     search_results = _get_tavily_client().search(
@@ -67,15 +67,15 @@ def searxng_search(
 ) -> str:
     """Search the web for information on a given query.
 
-    Uses the local SearXNG metasearch instance to discover relevant URLs, then
-    fetches and returns the full webpage content as markdown.
+    Uses the local SearXNG metasearch instance to discover relevant URLs and
+    returns the result titles, URLs and snippets.
 
     Args:
         query: Search query to execute
         max_results: Maximum number of results to return (max 25, default: 5)
 
     Returns:
-        Formatted search results with full webpage content
+        Numbered search results with title, URL and snippet
     """
     response = httpx.get(
         f"{SEARXNG_URL}/search",

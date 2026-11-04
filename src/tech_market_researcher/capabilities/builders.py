@@ -7,6 +7,7 @@ from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.tools import BaseTool
 
 from tech_market_researcher.capabilities.search import get_search_tool
+from tech_market_researcher.capabilities.webpage import fetch_page
 from tech_market_researcher.core.configuration import CapabilitiesConfig
 
 
@@ -23,4 +24,6 @@ def build_tool_list(config: CapabilitiesConfig) -> list[BaseTool]:
     tools = []
     if config.search.enabled:
         tools.append(get_search_tool(config.search))
+    if config.fetch_page.enabled:
+        tools.append(fetch_page)
     return tools

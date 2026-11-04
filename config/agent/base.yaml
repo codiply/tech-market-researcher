@@ -13,5 +13,7 @@ supervisor:
       enabled: true
       provider: searxng
       # provider: tavily
+    fetch_page:
+      enabled: true
     todo_list:
       enabled: true

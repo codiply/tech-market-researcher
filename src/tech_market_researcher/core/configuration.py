@@ -53,6 +53,12 @@ class SearchToolConfig(BaseModel):
     provider: SearchProvider = SearchProvider.SEARXNG
 
 
+class FetchPageConfig(BaseModel):
+    """Fetch-page tool settings. Omit the section (or set enabled: false) to disable."""
+
+    enabled: bool = False
+
+
 class TodoListConfig(BaseModel):
     """Todo-list middleware settings."""
 
@@ -63,6 +69,7 @@ class CapabilitiesConfig(BaseModel):
     """Settings for the tools and middlewares available to the agent."""
 
     search: SearchToolConfig = Field(default_factory=SearchToolConfig)
+    fetch_page: FetchPageConfig = Field(default_factory=FetchPageConfig)
     todo_list: TodoListConfig = Field(default_factory=TodoListConfig)
 
 
