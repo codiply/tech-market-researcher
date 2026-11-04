@@ -4,7 +4,12 @@ from argparse import ArgumentParser
 
 from pydantic import BaseModel
 
-from tech_market_researcher.core.constants import DEFAULT_CONFIG_NAME, DEFAULT_SESSION_ID, DEFAULT_USER_ID
+from tech_market_researcher.core.constants import (
+    DEFAULT_CONFIG_NAME,
+    DEFAULT_SESSION_ID,
+    DEFAULT_TIME_ZONE,
+    DEFAULT_USER_ID,
+)
 
 
 class CommandLineArguments(BaseModel):
@@ -13,6 +18,7 @@ class CommandLineArguments(BaseModel):
     config_name: str
     user_id: str
     session_id: str
+    time_zone: str
 
 
 def _build_argument_parser() -> ArgumentParser:
@@ -25,10 +31,17 @@ def _build_argument_parser() -> ArgumentParser:
     )
     parser.add_argument("--user-id", default=DEFAULT_USER_ID, help="User ID for the agent run.")
     parser.add_argument("--session-id", default=DEFAULT_SESSION_ID, help="Session ID for the agent run.")
+    parser.add_argument(
+        "--time-zone",
+        default=DEFAULT_TIME_ZONE,
+        help="User IANA time zone, used by tools that report times (e.g. 'Europe/Madrid').",
+    )
     return parser
 
 
 def get_args() -> CommandLineArguments:
     """Parse the process command line into CommandLineArguments."""
     ns = _build_argument_parser().parse_args()
-    return CommandLineArguments(config_name=ns.config_name, user_id=ns.user_id, session_id=ns.session_id)
+    return CommandLineArguments(
+        config_name=ns.config_name, user_id=ns.user_id, session_id=ns.session_id, time_zone=ns.time_zone
+    )

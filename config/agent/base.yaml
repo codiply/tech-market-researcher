@@ -9,13 +9,15 @@ supervisor:
     # name: bedrock.eu.amazon.nova-2-lite-v1
 
   capabilities:
+    context_debugger:
+      enabled: true
+    current_datetime:
+      enabled: true
+    fetch_page:
+      enabled: true
     search:
       enabled: true
       provider: searxng
       # provider: tavily
-    fetch_page:
-      enabled: true
     todo_list:
-      enabled: true
-    context_debugger:
       enabled: true

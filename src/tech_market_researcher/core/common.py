@@ -4,7 +4,8 @@ from pydantic import BaseModel
 
 
 class AgentContext(BaseModel):
-    """Identifier pair passed to agents on every invocation."""
+    """Per-run context passed to agents on every invocation."""
 
     user_id: str
     session_id: str
+    time_zone: str

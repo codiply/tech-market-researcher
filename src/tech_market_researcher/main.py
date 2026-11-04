@@ -32,7 +32,7 @@ def main() -> None:
     setup_telemetry(__version__)
 
     agent = create_agent(config)
-    context = AgentContext(user_id=args.user_id, session_id=args.session_id)
+    context = AgentContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
 
     console.print("Chat with the agent. Type 'exit' to quit.")
     messages: list = []

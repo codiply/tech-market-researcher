@@ -71,13 +71,20 @@ class ContextDebuggerConfig(BaseModel):
     enabled: bool = False
 
 
+class CurrentDateTimeConfig(BaseModel):
+    """Current-datetime tool settings. Omit the section (or set enabled: false) to disable."""
+
+    enabled: bool = False
+
+
 class CapabilitiesConfig(BaseModel):
     """Settings for the tools and middlewares available to the agent."""
 
-    search: SearchToolConfig = Field(default_factory=SearchToolConfig)
-    fetch_page: FetchPageConfig = Field(default_factory=FetchPageConfig)
-    todo_list: TodoListConfig = Field(default_factory=TodoListConfig)
     context_debugger: ContextDebuggerConfig = Field(default_factory=ContextDebuggerConfig)
+    current_datetime: CurrentDateTimeConfig = Field(default_factory=CurrentDateTimeConfig)
+    fetch_page: FetchPageConfig = Field(default_factory=FetchPageConfig)
+    search: SearchToolConfig = Field(default_factory=SearchToolConfig)
+    todo_list: TodoListConfig = Field(default_factory=TodoListConfig)
 
 
 class SupervisorConfig(BaseModel):

@@ -6,6 +6,7 @@ from langchain.agents.middleware import TodoListMiddleware
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.tools import BaseTool
 
+from tech_market_researcher.capabilities.clock import current_datetime
 from tech_market_researcher.capabilities.context import context_debugger
 from tech_market_researcher.capabilities.search import get_search_tool
 from tech_market_researcher.capabilities.webpage import fetch_page
@@ -29,4 +30,6 @@ def build_tool_list(config: CapabilitiesConfig) -> list[BaseTool]:
         tools.append(fetch_page)
     if config.context_debugger.enabled:
         tools.append(context_debugger)
+    if config.current_datetime.enabled:
+        tools.append(current_datetime)
     return tools
