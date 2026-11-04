@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 CONFIG_DIR = Path("config") / "bootstrapping"
 
@@ -71,11 +71,50 @@ class LlmConnectionConfig(BaseModel):
         return None
 
 
+class BudgetPolicyResetPeriod(str, Enum):
+    """Budget policy window, as written in the config file."""
+
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+
+    @property
+    def duration_unit(self) -> str:
+        """MLflow BudgetDurationUnit matching this period (always value 1)."""
+        return {
+            BudgetPolicyResetPeriod.DAILY: "DAYS",
+            BudgetPolicyResetPeriod.WEEKLY: "WEEKS",
+            BudgetPolicyResetPeriod.MONTHLY: "MONTHS",
+        }[self]
+
+
+class BudgetPolicyAction(str, Enum):
+    """Gateway action when a budget policy is exceeded (alert is not exposed for now)."""
+
+    REJECT = "reject"
+
+    @property
+    def gateway_action(self) -> str:
+        """MLflow BudgetAction matching this action."""
+        if self is BudgetPolicyAction.REJECT:
+            return "REJECT"
+        raise NotImplementedError(f"No gateway action mapping for {self!r}.")
+
+
+class BudgetPolicyConfig(BaseModel):
+    """One global AI gateway budget policy."""
+
+    amount_usd: float = Field(gt=0)
+    reset_period: BudgetPolicyResetPeriod
+    action: BudgetPolicyAction
+
+
 class MlflowConfig(BaseModel):
     """MLflow AI Gateway settings."""
 
     llm_connections: list[LlmConnectionConfig]
     endpoints: list[EndpointConfig] = []
+    budget_policies: list[BudgetPolicyConfig] = []
 
     @model_validator(mode="after")
     def _check_duplicate_names(self) -> "MlflowConfig":

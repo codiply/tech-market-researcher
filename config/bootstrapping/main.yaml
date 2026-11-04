@@ -24,6 +24,10 @@ mlflow:
     - name: bedrock.eu.amazon.nova-pro-v1
       model_name: eu.amazon.nova-pro-v1:0
       api_key_name: bedrock-eu
+  budget_policies:
+    - amount_usd: 30.00
+      reset_period: weekly
+      action: reject
 s3:
   buckets_to_create:
     - mlflow-artifacts

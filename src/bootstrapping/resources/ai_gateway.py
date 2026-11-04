@@ -5,7 +5,7 @@ import os
 
 import requests
 
-from bootstrapping.common.configuration import BootstrapConfig
+from bootstrapping.common.configuration import BootstrapConfig, BudgetPolicyConfig
 from bootstrapping.common.exceptions import BootstrapError
 
 logger = logging.getLogger(__name__)
@@ -199,8 +199,72 @@ def _create_llm_connections(server_uri: str, config: BootstrapConfig) -> None:
         logger.info("Updated LLM connection '%s'.", name)
 
 
+def _budget_policy_matches(policy: dict, duration: dict, action: str) -> bool:
+    """True if the policy matches the configured one ignoring amount (global scope, window, action)."""
+    return (
+        policy.get("target_scope") == "GLOBAL"
+        and policy.get("duration") == duration
+        and policy.get("budget_action") == action
+    )
+
+
+def _ensure_budget_policy(server_uri: str, budget: BudgetPolicyConfig) -> None:
+    """Create or update a global budget policy in place, never creating a duplicate.
+
+    A policy matching the configured window and action (ignoring amount) is
+    updated to the configured amount. Several such policies is an error.
+    """
+    duration = {"unit": budget.reset_period.duration_unit, "value": 1}
+    action = budget.action.gateway_action
+    policies = _call(server_uri, "GET", "budgets/list").get("budget_policies", [])
+    matching = [p for p in policies if _budget_policy_matches(p, duration, action)]
+    if len(matching) > 1:
+        raise BootstrapError(
+            f"Found {len(matching)} global budget policies matching the configured "
+            f"({budget.reset_period.value}, {budget.action.value}). "
+            "Remove the stale ones in the MLflow UI and re-run."
+        )
+    if matching:
+        _call(
+            server_uri,
+            "POST",
+            "budgets/update",
+            body={
+                "budget_policy_id": matching[0]["budget_policy_id"],
+                "budget_unit": "USD",
+                "budget_amount": budget.amount_usd,
+                "duration": duration,
+                "budget_action": action,
+            },
+        )
+        logger.info(
+            "Updated existing global budget policy to %s USD, %s.", budget.amount_usd, budget.reset_period.value
+        )
+        return
+    _call(
+        server_uri,
+        "POST",
+        "budgets/create",
+        body={
+            "budget_unit": "USD",
+            "budget_amount": budget.amount_usd,
+            "duration": duration,
+            "target_scope": "GLOBAL",
+            "budget_action": action,
+        },
+    )
+    logger.info("Created global budget policy (%s USD, %s).", budget.amount_usd, budget.reset_period.value)
+
+
+def _create_or_update_budget_policies(server_uri: str, config: BootstrapConfig) -> None:
+    """Create or update one global budget policy per configured budget policy."""
+    for budget in config.mlflow.budget_policies:
+        _ensure_budget_policy(server_uri, budget)
+
+
 def bootstrap_ai_gateway(config: BootstrapConfig) -> None:
-    """Provision the AI Gateway: LLM connections, then models and endpoints."""
+    """Provision the AI Gateway: LLM connections, models/endpoints, budget policies."""
     server_uri = os.environ["MLFLOW_SERVER_URI"].rstrip("/")
     _create_llm_connections(server_uri, config)
     _create_models_and_endpoints(server_uri, config)
+    _create_or_update_budget_policies(server_uri, config)
