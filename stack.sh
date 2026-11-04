@@ -79,9 +79,11 @@ except Exception:
 }
 
 # Bootstrap the MLflow stack (idempotent).
+# MLFLOW_TRACKING_USERNAME attributes dataset records to the automation instead of the local user.
+# (read_mlflow_creds() only looks at MLFLOW_TRACKING_USERNAME, not MLFLOW_USER.)
 bootstrap() {
   wait_for_mlflow || return 1
-  uv --directory "$ROOT" run bootstrap
+  MLFLOW_TRACKING_USERNAME=bootstrap uv --directory "$ROOT" run bootstrap
 }
 
 case "$cmd" in

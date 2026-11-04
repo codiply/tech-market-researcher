@@ -109,12 +109,21 @@ class BudgetPolicyConfig(BaseModel):
     action: BudgetPolicyAction
 
 
+class MlflowDatasetConfig(BaseModel):
+    """One evaluation dataset provisioned under an MLflow experiment."""
+
+    experiment: str
+    dataset_name: str
+    local_directories: list[str] = []
+
+
 class MlflowConfig(BaseModel):
     """MLflow AI Gateway settings."""
 
     llm_connections: list[LlmConnectionConfig]
     endpoints: list[EndpointConfig] = []
     budget_policies: list[BudgetPolicyConfig] = []
+    datasets: list[MlflowDatasetConfig] = []
 
     @model_validator(mode="after")
     def _check_duplicate_names(self) -> "MlflowConfig":

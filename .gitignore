@@ -10,3 +10,7 @@ __pycache__/
 .venv/
 build/
 dist/
+
+# MLflow local fallback DB (created if a client runs without a tracking URI)
+mlflow.db
+mlruns/

@@ -28,6 +28,12 @@ mlflow:
     - amount_usd: 30.00
       reset_period: weekly
       action: reject
+  datasets:
+    - experiment: tech-market-researcher-001
+      dataset_name: initial_test
+      local_directories:
+        - test
+
 s3:
   buckets_to_create:
     - mlflow-artifacts
