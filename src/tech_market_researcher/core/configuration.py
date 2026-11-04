@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 
 CONFIG_DIR = Path("config") / "agent"
 
@@ -47,22 +47,30 @@ class SearchProvider(str, Enum):
 
 
 class SearchToolConfig(BaseModel):
-    """Search tool settings."""
+    """Search tool settings. Omit the section (or set enabled: false) to disable."""
 
-    provider: SearchProvider
+    enabled: bool = False
+    provider: SearchProvider = SearchProvider.SEARXNG
 
 
-class ToolsConfig(BaseModel):
-    """Tool settings."""
+class TodoListConfig(BaseModel):
+    """Todo-list middleware settings."""
 
-    search: SearchToolConfig
+    enabled: bool = False
+
+
+class CapabilitiesConfig(BaseModel):
+    """Settings for the tools and middlewares available to the agent."""
+
+    search: SearchToolConfig = Field(default_factory=SearchToolConfig)
+    todo_list: TodoListConfig = Field(default_factory=TodoListConfig)
 
 
 class SupervisorConfig(BaseModel):
     """Supervisor agent settings."""
 
     model: ModelConfig
-    tools: ToolsConfig
+    capabilities: CapabilitiesConfig
 
 
 class ApplicationConfig(BaseModel):

@@ -8,7 +8,10 @@ supervisor:
     name: omlx.Qwen3.8-27B-oQ4e-mtp
     # name: bedrock.eu.amazon.nova-2-lite-v1
 
-  tools:
+  capabilities:
     search:
+      enabled: true
       provider: searxng
       # provider: tavily
+    todo_list:
+      enabled: true
