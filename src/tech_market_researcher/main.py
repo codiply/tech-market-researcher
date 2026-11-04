@@ -14,6 +14,7 @@ from rich.console import Console
 
 from tech_market_researcher.agents.main import create_agent
 from tech_market_researcher.core.arguments import get_args
+from tech_market_researcher.core.common import AgentContext
 from tech_market_researcher.core.configuration import load_config
 from tech_market_researcher.core.telemetry import setup_telemetry
 
@@ -31,6 +32,7 @@ def main() -> None:
     setup_telemetry(__version__)
 
     agent = create_agent(config)
+    context = AgentContext(user_id=args.user_id, session_id=args.session_id)
 
     console.print("Chat with the agent. Type 'exit' to quit.")
     messages: list = []
@@ -42,7 +44,7 @@ def main() -> None:
             continue
 
         messages.append({"role": "user", "content": user_input})
-        result = agent.invoke({"messages": messages})
+        result = agent.invoke({"messages": messages}, context=context)
         # Keep the full conversation (incl. the agent's reply) for the next turn
         messages = result["messages"]
         console.print("[bold cyan]agent>[/bold cyan]", result["messages"][-1].content)

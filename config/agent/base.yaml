@@ -17,3 +17,5 @@ supervisor:
       enabled: true
     todo_list:
       enabled: true
+    context_debugger:
+      enabled: true

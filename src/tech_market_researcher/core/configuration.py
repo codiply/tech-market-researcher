@@ -65,12 +65,19 @@ class TodoListConfig(BaseModel):
     enabled: bool = False
 
 
+class ContextDebuggerConfig(BaseModel):
+    """Context-debugger tool settings. Omit the section (or set enabled: false) to disable."""
+
+    enabled: bool = False
+
+
 class CapabilitiesConfig(BaseModel):
     """Settings for the tools and middlewares available to the agent."""
 
     search: SearchToolConfig = Field(default_factory=SearchToolConfig)
     fetch_page: FetchPageConfig = Field(default_factory=FetchPageConfig)
     todo_list: TodoListConfig = Field(default_factory=TodoListConfig)
+    context_debugger: ContextDebuggerConfig = Field(default_factory=ContextDebuggerConfig)
 
 
 class SupervisorConfig(BaseModel):

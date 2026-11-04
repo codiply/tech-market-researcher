@@ -4,6 +4,7 @@ from deepagents import create_deep_agent
 from langchain_openai import ChatOpenAI
 
 from tech_market_researcher.capabilities.builders import build_middleware_list, build_tool_list
+from tech_market_researcher.core.common import AgentContext
 from tech_market_researcher.core.configuration import ApplicationConfig
 
 
@@ -21,4 +22,5 @@ def create_agent(config: ApplicationConfig):
         system_prompt="You are a Researcher giving me insights into the Tech Market.",
         tools=build_tool_list(capabilities),
         middleware=build_middleware_list(capabilities),
+        context_schema=AgentContext,
     )
