@@ -9,7 +9,7 @@ supervisor:
     # name: bedrock.eu.amazon.nova-2-lite-v1
 
   capabilities:
-    context_debugger:
+    runtime_context_debugger:
       enabled: true
     current_datetime:
       enabled: true

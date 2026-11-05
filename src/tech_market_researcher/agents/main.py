@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 
 from tech_market_researcher.capabilities.builders import build_middleware_list, build_tool_list
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
-from tech_market_researcher.core.common import AgentContext
+from tech_market_researcher.core.common import AgentRuntimeContext
 from tech_market_researcher.core.configuration import load_config
 
 
@@ -24,5 +24,5 @@ def create_agent(args: AgentCommandLineArguments):
         system_prompt="You are a Researcher giving me insights into the Tech Market.",
         tools=build_tool_list(capabilities),
         middleware=build_middleware_list(capabilities),
-        context_schema=AgentContext,
+        context_schema=AgentRuntimeContext,
     )

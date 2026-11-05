@@ -5,11 +5,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from langchain.tools import ToolRuntime, tool
 
-from tech_market_researcher.core.common import AgentContext
+from tech_market_researcher.core.common import AgentRuntimeContext
 
 
 @tool
-def current_datetime(runtime: ToolRuntime[AgentContext]) -> str:
+def current_datetime(runtime: ToolRuntime[AgentRuntimeContext]) -> str:
     """Return the current date and time in the user's timezone, with its UTC offset.
 
     Falls back to UTC if the configured timezone cannot be parsed."""

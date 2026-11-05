@@ -14,7 +14,7 @@ from rich.console import Console
 
 from tech_market_researcher.agents.main import create_agent
 from tech_market_researcher.core.arguments import CliCommandLineArguments, get_args
-from tech_market_researcher.core.common import AgentContext
+from tech_market_researcher.core.common import AgentRuntimeContext
 from tech_market_researcher.core.observability import setup_observability
 
 # pylint: enable=wrong-import-position
@@ -30,7 +30,7 @@ def main() -> None:
     setup_observability(__version__)
 
     agent = create_agent(args)
-    context = AgentContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
+    context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
 
     console.print("Chat with the agent. Type 'exit' to quit.")
     messages: list = []

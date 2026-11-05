@@ -3,8 +3,8 @@
 from pydantic import BaseModel
 
 
-class AgentContext(BaseModel):
-    """Per-run context passed to agents on every invocation."""
+class AgentRuntimeContext(BaseModel):
+    """Per-run runtime context passed to agents on every invocation."""
 
     user_id: str
     session_id: str
