@@ -4,12 +4,14 @@ from deepagents import create_deep_agent
 from langchain_openai import ChatOpenAI
 
 from tech_market_researcher.capabilities.builders import build_middleware_list, build_tool_list
+from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.common import AgentContext
-from tech_market_researcher.core.configuration import ApplicationConfig
+from tech_market_researcher.core.configuration import load_config
 
 
-def create_agent(config: ApplicationConfig):
-    """Create the supervisor agent."""
+def create_agent(args: AgentCommandLineArguments):
+    """Create the supervisor agent from the loaded config named by args."""
+    config = load_config(args.config_name)
     model_connection = config.get_model_connection_details(config.supervisor.model)
     model = ChatOpenAI(
         model=model_connection.model_name,

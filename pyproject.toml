@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-agent = "tech_market_researcher.main:main"
+agent_cli = "tech_market_researcher.agent_cli:main"
 bootstrap = "bootstrapping.main:main"
 
 [build-system]

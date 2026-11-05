@@ -13,9 +13,8 @@ load_dotenv()
 from rich.console import Console
 
 from tech_market_researcher.agents.main import create_agent
-from tech_market_researcher.core.arguments import get_args
+from tech_market_researcher.core.arguments import CliCommandLineArguments, get_args
 from tech_market_researcher.core.common import AgentContext
-from tech_market_researcher.core.configuration import load_config
 from tech_market_researcher.core.observability import setup_observability
 
 # pylint: enable=wrong-import-position
@@ -27,11 +26,10 @@ console = Console()
 
 def main() -> None:
     """Run the interactive chat REPL against the configured gateway endpoint."""
-    args = get_args()
-    config = load_config(args.config_name)
+    args = get_args(CliCommandLineArguments)
     setup_observability(__version__)
 
-    agent = create_agent(config)
+    agent = create_agent(args)
     context = AgentContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
 
     console.print("Chat with the agent. Type 'exit' to quit.")

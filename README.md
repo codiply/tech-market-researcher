@@ -71,6 +71,14 @@ The stack exposes:
 | MLflow database (Postgres) | `0.0.0.0:5433` | backend store; credentials in `.env` (`MLFLOW_DB_*`) |
 | Arize database (Postgres) | `0.0.0.0:5434` | Arize backend store; credentials in `.env` (`ARIZE_DB_*`) |
 
+## Run the agent
+
+```bash
+uv run agent_cli
+```
+
+Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
+
 ## Common commands
 
 ```bash
