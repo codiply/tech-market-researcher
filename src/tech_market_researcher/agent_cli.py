@@ -1,7 +1,5 @@
 """Interactive chat agent talking to an MLflow AI Gateway endpoint."""
 
-from importlib.metadata import version
-
 from dotenv import load_dotenv
 
 # Load .env from the current directory (real env vars take precedence)
@@ -15,11 +13,8 @@ from rich.console import Console
 from tech_market_researcher.agents.main import create_agent
 from tech_market_researcher.core.arguments import CliCommandLineArguments, get_args
 from tech_market_researcher.core.common import AgentRuntimeContext
-from tech_market_researcher.core.observability import setup_observability
 
 # pylint: enable=wrong-import-position
-
-__version__ = version("tech-market-researcher")
 
 console = Console()
 
@@ -27,7 +22,6 @@ console = Console()
 def main() -> None:
     """Run the interactive chat REPL against the configured gateway endpoint."""
     args = get_args(CliCommandLineArguments)
-    setup_observability(__version__)
 
     agent = create_agent(args)
     context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)

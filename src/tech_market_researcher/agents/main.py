@@ -7,11 +7,13 @@ from tech_market_researcher.capabilities.builders import build_middleware_list, 
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.common import AgentRuntimeContext
 from tech_market_researcher.core.configuration import load_config
+from tech_market_researcher.core.observability import setup_observability
 
 
 def create_agent(args: AgentCommandLineArguments):
     """Create the supervisor agent from the loaded config named by args."""
     config = load_config(args.config_name)
+    setup_observability(config.observability)
     model_connection = config.get_model_connection_details(config.supervisor.model)
     model = ChatOpenAI(
         model=model_connection.model_name,

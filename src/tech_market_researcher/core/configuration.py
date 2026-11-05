@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
 
 CONFIG_DIR = Path("config") / "agent"
 
@@ -94,11 +94,45 @@ class SupervisorConfig(BaseModel):
     capabilities: CapabilitiesConfig
 
 
+class MlflowObservabilityConfig(BaseModel):
+    """MLflow observability settings. Omit the section (or set enabled: false) to disable."""
+
+    enabled: bool = False
+    experiment_template: str = ""
+
+    @model_validator(mode="after")
+    def _check_experiment_template(self) -> "MlflowObservabilityConfig":
+        if self.enabled and not self.experiment_template:
+            raise ValueError("experiment_template is required when enabled is true.")
+        return self
+
+
+class ArizeObservabilityConfig(BaseModel):
+    """Arize observability settings. Omit the section (or set enabled: false) to disable."""
+
+    enabled: bool = False
+    project_name: str = ""
+
+    @model_validator(mode="after")
+    def _check_project_name(self) -> "ArizeObservabilityConfig":
+        if self.enabled and not self.project_name:
+            raise ValueError("project_name is required when enabled is true.")
+        return self
+
+
+class ObservabilityConfig(BaseModel):
+    """Observability settings. Omit the section to disable both MLflow and Arize."""
+
+    mlflow: MlflowObservabilityConfig = Field(default_factory=MlflowObservabilityConfig)
+    arize: ArizeObservabilityConfig = Field(default_factory=ArizeObservabilityConfig)
+
+
 class ApplicationConfig(BaseModel):
     """Application settings."""
 
     model_providers: dict[str, ModelProviderConfig]
     supervisor: SupervisorConfig
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
     def get_model_connection_details(self, model: ModelConfig) -> ModelConnectionDetails:
         """Resolve a model's provider into its full connection details."""

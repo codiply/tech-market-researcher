@@ -1,6 +1,9 @@
 """Application-wide constants."""
 
 import os
+from importlib.metadata import version
+
+PACKAGE_VERSION = version("tech-market-researcher")
 
 DEFAULT_CONFIG_NAME = "base"
 
