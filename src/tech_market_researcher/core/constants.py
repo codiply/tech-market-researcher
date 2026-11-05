@@ -8,7 +8,7 @@ PACKAGE_VERSION = version("tech-market-researcher")
 DEFAULT_CONFIG_NAME = "base"
 
 DEFAULT_USER_ID = "codiply"
-DEFAULT_SESSION_ID = "session-0001"
+DEFAULT_CONVERSATION_ID = "conversation-0001"
 DEFAULT_TIME_ZONE = "Europe/Madrid"
 
 # Local SearXNG instance (see docker/docker-compose.yml); overridable via env.

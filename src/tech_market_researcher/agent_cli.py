@@ -24,7 +24,7 @@ def main() -> None:
     args = get_args(CliCommandLineArguments)
 
     agent = create_agent(args)
-    context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
+    context = AgentRuntimeContext(user_id=args.user_id, conversation_id=args.conversation_id, time_zone=args.time_zone)
 
     console.print("Chat with the agent. Type 'exit' to quit.")
     messages: list = []

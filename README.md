@@ -77,7 +77,7 @@ The stack exposes:
 uv run agent_cli
 ```
 
-Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
+Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--user-id`, `--conversation-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
 
 ## Common commands
 
