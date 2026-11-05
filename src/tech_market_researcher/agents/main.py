@@ -23,7 +23,7 @@ def create_agent(args: AgentCommandLineArguments):
     capabilities = config.supervisor.capabilities
     return create_deep_agent(
         model=model,
-        system_prompt="You are a Researcher giving me insights into the Tech Market.",
+        system_prompt=config.supervisor.system_prompt,
         tools=build_tool_list(capabilities),
         middleware=build_middleware_list(capabilities),
         context_schema=AgentRuntimeContext,

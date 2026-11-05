@@ -3,6 +3,8 @@ model_providers:
     base_url: http://localhost:5000/gateway/mlflow/v1
 
 supervisor:
+  system_prompt: |-
+    You are a Researcher giving me insights into the Tech Market.
   model:
     provider: mlflow_gateway
     name: omlx.Qwen3.8-27B-oQ4e-mtp

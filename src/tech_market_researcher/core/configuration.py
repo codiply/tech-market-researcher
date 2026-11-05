@@ -91,6 +91,7 @@ class SupervisorConfig(BaseModel):
     """Supervisor agent settings."""
 
     model: ModelConfig
+    system_prompt: str
     capabilities: CapabilitiesConfig
 
 
