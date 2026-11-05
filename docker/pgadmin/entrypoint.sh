@@ -1,8 +1,8 @@
 #!/bin/sh
 # pgAdmin entrypoint wrapper:
-#   1. renders /tmp/servers.json from the compose environment (MLFLOW_DB_*),
-#      which the image's entrypoint imports at startup, adding the MLflow
-#      database to the server list;
+#   1. renders /tmp/servers.json from the compose environment (MLFLOW_DB_*
+#      and ARIZE_DB_*), which the image's entrypoint imports at startup,
+#      adding the MLflow and Arize databases to the server list;
 #   2. starts the image's real entrypoint in the background;
 #   3. once the imported server exists in the config DB, saves the database
 #      password via save_password.py (encrypted with the pgAdmin login
@@ -22,6 +22,15 @@ cat > /tmp/servers.json <<JSON
       "MaintenanceDB": "${MLFLOW_DB_NAME:-mlflow}",
       "Username": "${MLFLOW_DB_USER:-mlflow}",
       "Password": "${MLFLOW_DB_PASSWORD:?set MLFLOW_DB_PASSWORD in the environment}"
+    },
+    "2": {
+      "Name": "${ARIZE_SERVER_NAME:-Arize (Postgres)}",
+      "Group": "Servers",
+      "Host": "arize_db",
+      "Port": 5432,
+      "MaintenanceDB": "${ARIZE_DB_NAME:-arize}",
+      "Username": "${ARIZE_DB_USER:?set ARIZE_DB_USER in the environment}",
+      "Password": "${ARIZE_DB_PASSWORD:?set ARIZE_DB_PASSWORD in the environment}"
     }
   }
 }

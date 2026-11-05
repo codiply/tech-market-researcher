@@ -12,6 +12,8 @@ dependencies = [
     "langchain-openai~=1.7.3",
     "rich~=15.0.0",
     "mlflow~=3.17.2",
+    "arize-otel~=0.14.1",
+    "openinference-instrumentation-langchain~=0.1.82",
     "python-dotenv~=1.2.4",
     "boto3~=1.43.123",
     "pydantic~=2.14.2",
@@ -55,4 +57,8 @@ python_version = "3.14"
 
 [[tool.mypy.overrides]]
 module = "tavily"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["arize.*"]
 ignore_missing_imports = true

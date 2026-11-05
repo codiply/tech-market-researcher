@@ -19,6 +19,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # Arize backend store.
+  arize_db:
+    image: postgres:17
+    container_name: arize_db
+    environment:
+      POSTGRES_USER: ${ARIZE_DB_USER:?set ARIZE_DB_USER in the environment}
+      POSTGRES_PASSWORD: ${ARIZE_DB_PASSWORD:?set ARIZE_DB_PASSWORD in the environment}
+      POSTGRES_DB: ${ARIZE_DB_NAME:-arize}
+    ports:
+      # Host 5434 avoids a local Postgres (5432) and mlflow_db (5433);
+      # the container itself listens on Postgres' default 5432.
+      - "5434:5432"
+    volumes:
+      # Host folder, ignored by git via storage/.gitignore
+      - ../storage/arize_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ARIZE_DB_USER:-postgres} -d ${ARIZE_DB_NAME:-arize}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Meta-search backend for the search tool. Official image from
   # https://docs.searxng.org/admin/installation-docker.html
   searxng:
@@ -77,14 +98,17 @@ services:
     image: tech-market-researcher/permissions-fixer:local
     container_name: permissions_fixer
     environment:
-      TARGET_DIRS: "/mlflow_db /minio /pgadmin /searxng_config /searxng_cache /searxng_valkey"
+      TARGET_DIRS: "/arize_db /mlflow_db /minio /pgadmin /searxng_config /searxng_cache /searxng_valkey"
       CRON_SCHEDULE: "*/1 * * * *"
     depends_on:
       mlflow_db:
         condition: service_healthy
+      arize_db:
+        condition: service_healthy
       minio:
         condition: service_healthy
     volumes:
+      - ../storage/arize_db:/arize_db
       - ../storage/mlflow_db:/mlflow_db
       - ../storage/minio:/minio
       - ../storage/pgadmin:/pgadmin
@@ -138,12 +162,19 @@ services:
       MLFLOW_DB_USER: ${MLFLOW_DB_USER:-mlflow}
       MLFLOW_DB_PASSWORD: ${MLFLOW_DB_PASSWORD:?set MLFLOW_DB_PASSWORD in the environment}
       MLFLOW_DB_NAME: ${MLFLOW_DB_NAME:-mlflow}
+      ARIZE_DB_USER: ${ARIZE_DB_USER:?set ARIZE_DB_USER in the environment}
+      ARIZE_DB_PASSWORD: ${ARIZE_DB_PASSWORD:?set ARIZE_DB_PASSWORD in the environment}
+      ARIZE_DB_NAME: ${ARIZE_DB_NAME:-arize}
       # Rendered by entrypoint.sh at container start.
       PGADMIN_SERVER_JSON_FILE: /tmp/servers.json
-      # Display name of the pre-configured server in the pgAdmin UI.
+      # Display name of the pre-configured MLflow server in the pgAdmin UI.
       PGADMIN_SERVER_NAME: "MLflow (Postgres)"
+      # Display name of the pre-configured Arize server in the pgAdmin UI.
+      ARIZE_SERVER_NAME: "Arize (Postgres)"
     depends_on:
       mlflow_db:
+        condition: service_healthy
+      arize_db:
         condition: service_healthy
     ports:
       - "5050:80"
@@ -184,3 +215,44 @@ services:
       --port 5000
     ports:
       - "5000:5000"
+
+  # Arize: LLM/agent observability server + UI (traces, evals).
+  # Pinned to a specific release tag; must be > 4.0 to support the SQL
+  # (Postgres) backend.
+  arize:
+    image: arizephoenix/phoenix:21.0.0
+    container_name: arize
+    depends_on:
+      arize_db:
+        condition: service_healthy
+    environment:
+      PHOENIX_SQL_DATABASE_URL: postgresql://${ARIZE_DB_USER:?set ARIZE_DB_USER in the environment}:${ARIZE_DB_PASSWORD:?set ARIZE_DB_PASSWORD in the environment}@arize_db:5432/${ARIZE_DB_NAME:-arize}
+      # Disable the login screen. Left unset, the Docker image's non-loopback
+      # bind (::) would auto-enable authentication.
+      PHOENIX_ENABLE_AUTH: "false"
+    ports:
+      - "6006:6006"   # UI and OTLP HTTP collector
+      - "4317:4317"   # OTLP gRPC collector
+    healthcheck:
+      # The image ships no shell, so probe with its own interpreter. A plain
+      # HTTP 200 is unreliable (Arize serves the SPA for any path), so query
+      # the GraphQL API instead: it returns data only once the backend and
+      # database are actually serving.
+      test:
+        - CMD
+        - /usr/bin/python3.13
+        - -c
+        - |
+          import urllib.request, json, sys
+          q = "{ projects { edges { node { id } } } }"
+          req = urllib.request.Request(
+              "http://127.0.0.1:6006/graphql",
+              data=json.dumps({"query": q}).encode(),
+              headers={"content-type": "application/json"},
+              method="POST",
+          )
+          body = json.load(urllib.request.urlopen(req, timeout=3))
+          sys.exit(0 if body.get("data") is not None and not body.get("errors") else 1)
+      interval: 10s
+      timeout: 5s
+      retries: 5
