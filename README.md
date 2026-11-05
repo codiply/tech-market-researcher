@@ -47,10 +47,10 @@ flowchart LR
     pgadmin -->|manages| arize_db
 ```
 
-- **Agent** — an agent built on the LangChain [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent). LLM requests go through the MLflow AI Gateway; every run is traced back to MLflow.
-- **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local OMLX server on the MacBook (default) or AWS Bedrock, and records the agent's traces.
-- **Search** — the agent's search tool uses either the local SearXNG metasearch backend (which fans out to many public search engines) or the Tavily API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
-- **Supporting containers** — Postgres (MLflow's backend store), Arize (LLM/agent observability) with its own Postgres store, MinIO (artifact storage), and pgAdmin (database UI).
+- **Agent** — an agent built on [LangChain](https://www.langchain.com) [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent). LLM requests go through the [MLflow](https://mlflow.org) AI Gateway; every run is traced back to MLflow.
+- **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces.
+- **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
+- **Supporting containers** — [Postgres](https://www.postgresql.org) (MLflow's backend store), [Arize](https://arize.com) (LLM/agent observability) with its own Postgres store, [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI).
 
 ## Start
 
@@ -62,14 +62,14 @@ The stack exposes:
 
 | Service | URL | Notes |
 | --- | --- | --- |
-| MLflow (UI) | [http://0.0.0.0:5000](http://0.0.0.0:5000) | experiments, models, AI Gateway |
-| SearXNG (UI) | [http://0.0.0.0:8384](http://0.0.0.0:8384) | local metasearch backend for the search tool; its JSON API powers the agent, no login |
-| MinIO (UI) | [http://0.0.0.0:9001](http://0.0.0.0:9001) | log in with `minio` / `minio12345` (fixed local default; MinIO requires an 8+ char root password) |
-| pgAdmin (UI) | [http://0.0.0.0:5050](http://0.0.0.0:5050) | log in with `admin@example.com` / `pgadmin12345` (fixed local default, override with `PGADMIN_PASSWORD`); the MLflow and Arize databases are pre-configured with the `MLFLOW_DB_*` / `ARIZE_DB_*` credentials from `.env` |
-| Arize (UI) | [http://0.0.0.0:6006](http://0.0.0.0:6006) | Arize: LLM/agent observability server + UI; also the OTLP HTTP collector on `6006` and gRPC collector on `4317` |
-| MinIO (S3 API) | `http://0.0.0.0:9000` | S3 endpoint for MLflow artifacts (`MLFLOW_S3_ENDPOINT_URL`) |
-| MLflow database (Postgres) | `0.0.0.0:5433` | backend store; credentials in `.env` (`MLFLOW_DB_*`) |
-| Arize database (Postgres) | `0.0.0.0:5434` | Arize backend store; credentials in `.env` (`ARIZE_DB_*`) |
+| [MLflow](https://mlflow.org) (UI) | [http://0.0.0.0:5000](http://0.0.0.0:5000) | experiments, models, AI Gateway |
+| [SearXNG](https://docs.searxng.org/) (UI) | [http://0.0.0.0:8384](http://0.0.0.0:8384) | local metasearch backend for the search tool; its JSON API powers the agent, no login |
+| [MinIO](https://min.io) (UI) | [http://0.0.0.0:9001](http://0.0.0.0:9001) | log in with `minio` / `minio12345` (fixed local default; MinIO requires an 8+ char root password) |
+| [pgAdmin](https://www.pgadmin.org) (UI) | [http://0.0.0.0:5050](http://0.0.0.0:5050) | log in with `admin@example.com` / `pgadmin12345` (fixed local default, override with `PGADMIN_PASSWORD`); the MLflow and Arize databases are pre-configured with the `MLFLOW_DB_*` / `ARIZE_DB_*` credentials from `.env` |
+| [Arize](https://arize.com) (UI) | [http://0.0.0.0:6006](http://0.0.0.0:6006) | Arize: LLM/agent observability server + UI; also the OTLP HTTP collector on `6006` and gRPC collector on `4317` |
+| [MinIO](https://min.io) (S3 API) | `http://0.0.0.0:9000` | S3 endpoint for MLflow artifacts (`MLFLOW_S3_ENDPOINT_URL`) |
+| MLflow database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5433` | backend store; credentials in `.env` (`MLFLOW_DB_*`) |
+| Arize database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5434` | Arize backend store; credentials in `.env` (`ARIZE_DB_*`) |
 
 ## Run the agent
 
@@ -142,3 +142,8 @@ The hook lives in `scripts/git-hooks/pre-push` (tracked in git). Setup is per-cl
 cp scripts/git-hooks/pre-push .git/hooks/pre-push
 chmod +x .git/hooks/pre-push
 ```
+
+## Learning Resources
+
+- [LangChain Deep Agents documentation](https://docs.langchain.com/oss/python/deepagents/overview) — docs for the `deepagents` framework the agent is built on.
+- [Evaluating and Improving Agentic Applications](https://learn.deeplearning.ai/courses/evaluating-and-improving-agentic-applications) — DeepLearning.AI course on evaluating and improving agents, which uses Arize.
