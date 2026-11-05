@@ -230,6 +230,10 @@ services:
       # Disable the login screen. Left unset, the Docker image's non-loopback
       # bind (::) would auto-enable authentication.
       PHOENIX_ENABLE_AUTH: "false"
+      # Encrypts credentials saved by the UI (e.g. annotation providers). Left
+      # unset, Arize falls back to a default key. Override with
+      # ARIZE_ENCRYPTION_SECRET if you prefer.
+      PHOENIX_SECRET: ${ARIZE_ENCRYPTION_SECRET:-arize-local-development-secret}
     ports:
       - "6006:6006"   # UI and OTLP HTTP collector
       - "4317:4317"   # OTLP gRPC collector
