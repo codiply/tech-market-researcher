@@ -109,12 +109,29 @@ class BudgetPolicyConfig(BaseModel):
     action: BudgetPolicyAction
 
 
-class MlflowDatasetConfig(BaseModel):
+class DatasetSourceConfig(BaseModel):
+    """A dataset sourced from JSON files in local folders under assets/datasets/."""
+
+    dataset_name: str
+    local_directories: list[str] = []
+
+
+class MlflowDatasetConfig(DatasetSourceConfig):
     """One evaluation dataset provisioned under an MLflow experiment."""
 
     experiment: str
-    dataset_name: str
-    local_directories: list[str] = []
+
+
+class ArizeDatasetConfig(DatasetSourceConfig):
+    """One dataset provisioned in Arize (Phoenix)."""
+
+    description: str | None = None
+
+
+class ArizeConfig(BaseModel):
+    """Arize (Phoenix) settings."""
+
+    datasets: list[ArizeDatasetConfig] = []
 
 
 class MlflowConfig(BaseModel):
@@ -153,6 +170,7 @@ class BootstrapConfig(BaseModel):
 
     mlflow: MlflowConfig
     s3: S3Config
+    arize: ArizeConfig
 
 
 def load_config(name: str) -> BootstrapConfig:

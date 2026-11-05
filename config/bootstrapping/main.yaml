@@ -34,6 +34,12 @@ mlflow:
       local_directories:
         - test
 
+arize:
+  datasets:
+    - dataset_name: initial_test
+      local_directories:
+        - test
+
 s3:
   buckets_to_create:
     - mlflow-artifacts

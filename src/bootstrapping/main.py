@@ -1,4 +1,4 @@
-"""Bootstrap the MLflow stack: MinIO artifact bucket, AI Gateway models, experiments and datasets."""
+"""Bootstrap the stack: MinIO artifact bucket, AI Gateway models, MLflow and Arize experiments/datasets."""
 
 import logging
 
@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from bootstrapping.common.configuration import load_config
 from bootstrapping.resources.ai_gateway import bootstrap_ai_gateway
+from bootstrapping.resources.arize_datasets import bootstrap_arize
 from bootstrapping.resources.mlflow_experiments import bootstrap_mlflow_experiments
 from bootstrapping.resources.s3 import bootstrap_s3
 
@@ -19,6 +20,7 @@ def main() -> None:
     bootstrap_s3(config)
     bootstrap_ai_gateway(config)
     bootstrap_mlflow_experiments(config)
+    bootstrap_arize(config)
 
 
 if __name__ == "__main__":

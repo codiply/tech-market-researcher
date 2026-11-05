@@ -1,42 +1,16 @@
 """MLflow experiment and dataset bootstrapping."""
 
-import hashlib
-import json
 import logging
 import os
-from pathlib import Path
 
 import mlflow
 from mlflow.exceptions import MlflowException
 
 from bootstrapping.common.configuration import BootstrapConfig, MlflowDatasetConfig
+from bootstrapping.common.datasets import load_records, record_input_hash
 from bootstrapping.common.exceptions import BootstrapError
 
 logger = logging.getLogger(__name__)
-
-DATASETS_DIR = Path("assets") / "datasets"
-
-
-def _input_hash(inputs: dict) -> str:
-    """Hash of the record inputs, matching the server's dedup key."""
-    return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
-
-
-def _load_records(dataset_config: MlflowDatasetConfig) -> list[dict]:
-    """Load one record per JSON file across the configured local directories.
-
-    The directory names are relative to assets/datasets/.
-    """
-    records: list[dict] = []
-    for name in dataset_config.local_directories:
-        directory = DATASETS_DIR / name
-        if not directory.is_dir():
-            raise BootstrapError(f"Dataset directory '{directory}' does not exist.")
-        for path in sorted(directory.glob("*.json")):
-            records.append(json.loads(path.read_text(encoding="utf-8")))
-    if not records:
-        raise BootstrapError(f"No records found for dataset '{dataset_config.dataset_name}'.")
-    return records
 
 
 def _ensure_experiment(client: mlflow.MlflowClient, name: str) -> str:
@@ -67,17 +41,17 @@ def _ensure_dataset(client: mlflow.MlflowClient, dataset_config: MlflowDatasetCo
     create duplicates. Records no longer present in the folders are pruned; pruning
     breaks any run/evaluation links to those record ids.
     """
-    records = _load_records(dataset_config)
+    records = load_records(dataset_config)
     dataset = _find_dataset(client, experiment_id, dataset_config.dataset_name)
     if dataset is None:
         dataset = client.create_dataset(dataset_config.dataset_name, experiment_id)
         logger.info("Created dataset '%s' in experiment '%s'.", dataset_config.dataset_name, dataset_config.experiment)
     else:
         logger.info("Dataset '%s' already exists - reusing.", dataset_config.dataset_name)
-    dataset.merge_records(records)
+    dataset.merge_records([record.raw for record in records])
     logger.info("Synced %d records to dataset '%s'.", len(records), dataset_config.dataset_name)
-    expected = {_input_hash(record["inputs"]) for record in records}
-    stale_ids = [r.dataset_record_id for r in dataset.records if _input_hash(r.inputs) not in expected]
+    expected = {record_input_hash(record.inputs) for record in records}
+    stale_ids = [r.dataset_record_id for r in dataset.records if record_input_hash(r.inputs) not in expected]
     if stale_ids:
         deleted = dataset.delete_records(stale_ids)
         logger.info(

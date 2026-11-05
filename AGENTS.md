@@ -12,7 +12,7 @@ Always pin docker images in `docker-compose.yml` to a specific version tag, neve
 
 ## Architecture diagram
 
-The README contains a Mermaid architecture diagram. Remind the user to update it whenever the implementation changes and the diagram no longer matches.
+The README contains a Mermaid architecture diagram. Remind the user to update it whenever the implementation changes and the diagram no longer matches. The bootstrap is not part of the diagram.
 
 ## Docstrings
 
