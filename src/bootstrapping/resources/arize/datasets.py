@@ -23,7 +23,7 @@ def _find_dataset(client: httpx.Client, name: str) -> str | None:
     return None
 
 
-def _ensure_dataset(client: httpx.Client, dataset_config: ArizeDatasetConfig) -> None:
+def _ensure_dataset(client: httpx.Client, dataset_config: ArizeDatasetConfig, dump_rendered: bool) -> None:
     """Create or update the dataset so its examples match the configured records.
 
     Examples are upserted by their unique id (folder/file name/index under assets/datasets/,
@@ -32,7 +32,7 @@ def _ensure_dataset(client: httpx.Client, dataset_config: ArizeDatasetConfig) ->
     examples. Each mutating upload creates a new immutable dataset version, which experiments
     pin to for reproducible evaluations.
     """
-    examples = [to_arize_example(r) for r in load_datasets(dataset_config.local_directories)]
+    examples = [to_arize_example(r) for r in load_datasets(dataset_config.local_directories, dump_rendered)]
     payload = ArizeExample.to_payload(dataset_config.dataset_name, examples)
     if _find_dataset(client, dataset_config.dataset_name) is None:
         payload["action"] = "create"
@@ -62,4 +62,4 @@ def bootstrap_arize(config: BootstrapConfig) -> None:
     base_url = os.environ["ARIZE_SERVER_URI"].rstrip("/")
     with httpx.Client(base_url=base_url, timeout=60.0) as client:
         for dataset_config in config.arize.datasets:
-            _ensure_dataset(client, dataset_config)
+            _ensure_dataset(client, dataset_config, config.debugging.dump_rendered_datasets)

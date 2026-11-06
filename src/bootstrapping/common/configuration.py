@@ -232,12 +232,20 @@ class S3Config(BaseModel):
     buckets_to_create: list[str]
 
 
+class DebuggingConfig(BaseModel):
+    """Debugging aids; disabled by default."""
+
+    # Dump rendered Jinja dataset templates into .debug/datasets/<dir>/<file>.yaml.
+    dump_rendered_datasets: bool = False
+
+
 class BootstrapConfig(BaseModel):
     """Application settings."""
 
     mlflow: MlflowConfig
     s3: S3Config
     arize: ArizeConfig
+    debugging: DebuggingConfig = DebuggingConfig()
 
 
 def load_config(name: str) -> BootstrapConfig:

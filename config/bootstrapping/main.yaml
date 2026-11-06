@@ -1,3 +1,5 @@
+debugging:
+  dump_rendered_datasets: true
 mlflow:
   llm_connections:
     - api_key_name: omlx-server

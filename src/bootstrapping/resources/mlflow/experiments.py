@@ -35,14 +35,16 @@ def _find_dataset(
     return None
 
 
-def _ensure_dataset(client: mlflow.MlflowClient, dataset_config: MlflowDatasetConfig, experiment_id: str) -> None:
+def _ensure_dataset(
+    client: mlflow.MlflowClient, experiment_id: str, dataset_config: MlflowDatasetConfig, dump_rendered: bool
+) -> None:
     """Create the dataset if missing, then sync its records with the configured ones.
 
     Records are upserted by the server (keyed on the inputs hash), so re-runs do not
     create duplicates. Records no longer present in the folders are pruned; pruning
     breaks any run/evaluation links to those record ids.
     """
-    records = [to_mlflow_record(r) for r in load_datasets(dataset_config.local_directories)]
+    records = [to_mlflow_record(r) for r in load_datasets(dataset_config.local_directories, dump_rendered)]
     dataset = _find_dataset(client, experiment_id, dataset_config.dataset_name)
     if dataset is None:
         dataset = client.create_dataset(dataset_config.dataset_name, experiment_id)
@@ -69,6 +71,6 @@ def bootstrap_mlflow_experiments(config: BootstrapConfig) -> None:
     try:
         for dataset_config in config.mlflow.datasets:
             experiment_id = _ensure_experiment(client, dataset_config.experiment)
-            _ensure_dataset(client, dataset_config, experiment_id)
+            _ensure_dataset(client, experiment_id, dataset_config, config.debugging.dump_rendered_datasets)
     except MlflowException as e:
         raise BootstrapError(str(e)) from e
