@@ -1,6 +1,8 @@
 """Command-line argument parsing."""
 
+from abc import ABC, abstractmethod
 from argparse import ArgumentParser
+from typing import Self
 
 from pydantic import BaseModel
 
@@ -12,7 +14,16 @@ from tech_market_researcher.core.constants import (
 )
 
 
-class AgentCommandLineArguments(BaseModel):
+class BaseCommandLineArguments(ABC, BaseModel):
+    """Base model for command-line arguments; subclasses declare fields and register the arguments."""
+
+    @classmethod
+    @abstractmethod
+    def add_arguments(cls: type[Self], parser: ArgumentParser) -> None:
+        """Register the model's command-line arguments on parser."""
+
+
+class AgentCommandLineArguments(BaseCommandLineArguments):
     """Command-line arguments consumed by the agent."""
 
     config_name: str
@@ -49,14 +60,14 @@ class CliCommandLineArguments(AgentCommandLineArguments):
         )
 
 
-def _build_argument_parser[ArgsT: AgentCommandLineArguments](cls: type[ArgsT]) -> ArgumentParser:
+def _build_argument_parser[ArgsT: BaseCommandLineArguments](cls: type[ArgsT]) -> ArgumentParser:
     """Build an argument parser whose arguments are registered by cls."""
     parser = ArgumentParser()
     cls.add_arguments(parser)
     return parser
 
 
-def get_args[ArgsT: AgentCommandLineArguments](cls: type[ArgsT]) -> ArgsT:
+def get_args[ArgsT: BaseCommandLineArguments](cls: type[ArgsT]) -> ArgsT:
     """Parse the process command line into the given arguments model."""
     ns = _build_argument_parser(cls).parse_args()
     return cls.model_validate(vars(ns))

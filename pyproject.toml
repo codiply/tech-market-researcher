@@ -27,6 +27,7 @@ dependencies = [
 [project.scripts]
 agent_cli = "tech_market_researcher.agent_cli:main"
 bootstrap = "bootstrapping.main:main"
+evals = "evaluations.main:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]

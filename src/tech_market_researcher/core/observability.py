@@ -36,7 +36,7 @@ def _setup_mlflow(config: MlflowObservabilityConfig) -> None:
     tracking_uri = os.environ[MLFLOW_TRACKING_URI_ENV].rstrip("/")
     mlflow.set_tracking_uri(tracking_uri)
     version = PACKAGE_VERSION
-    mlflow.set_experiment(config.experiment_template.format(project_version=version))
+    mlflow.set_experiment(config.experiment_name_template.format(project_version=version))
     mlflow.set_active_model(name=f"tech-market-researcher-v{version}".replace(".", "_"))
     # Enable auto-tracing for LangChain (and LangGraph-based frameworks like Deep Agent)
     mlflow.langchain.autolog()

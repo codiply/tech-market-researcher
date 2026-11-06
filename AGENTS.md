@@ -24,7 +24,7 @@ Do not stage, unstage, or commit files, unless explicitly instructed. The user m
 
 ## Pre-commit hooks
 
-Check them with `pre-commit run --all-files`.
+Check them by delegating a `pre-commit run --all-files` run to a sub-agent, so the output does not clutter the main conversation.
 
 ## Docstrings
 

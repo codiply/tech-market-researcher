@@ -27,7 +27,7 @@ supervisor:
 observability:
   mlflow:
     enabled: true
-    experiment_template: "tech-market-researcher-{project_version}"
+    experiment_name_template: "tech-market-researcher-{project_version}"
   arize:
     enabled: true
     project_name: "tech-market-researcher"
