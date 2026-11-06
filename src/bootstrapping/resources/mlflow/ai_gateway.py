@@ -159,7 +159,7 @@ def _create_llm_connections(server_uri: str, config: BootstrapConfig) -> None:
     """
     for connection in config.mlflow.llm_connections:
         name = connection.api_key_name
-        secret_value = {"api_key": connection.api_key}
+        secret_value = {"api_key": connection.api_key.get_secret_value()}
         # Non-OpenAI providers (or any custom base URL) are configured via the
         # secret's auth_config. An empty map is an explicit clear, so it is
         # sent when no base URL is configured to drop a stale one.

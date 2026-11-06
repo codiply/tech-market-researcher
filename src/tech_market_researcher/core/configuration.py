@@ -17,11 +17,11 @@ class ModelProviderConfig(BaseModel):
     api_key_env_var_name: str | None = None
 
     @property
-    def api_key(self) -> str:
+    def api_key(self) -> SecretStr:
         """API key from the env var api_key_env_var_name, or dummy if unset."""
         if self.api_key_env_var_name:
-            return os.environ[self.api_key_env_var_name]
-        return "dummy"
+            return SecretStr(os.environ[self.api_key_env_var_name])
+        return SecretStr("dummy")
 
 
 class ModelConfig(BaseModel):
@@ -144,7 +144,7 @@ class ApplicationConfig(BaseModel):
         return ModelConnectionDetails(
             model_name=model.name,
             base_url=provider.base_url,
-            api_key=SecretStr(provider.api_key),
+            api_key=provider.api_key,
         )
 
 

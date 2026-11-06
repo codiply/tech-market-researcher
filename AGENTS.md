@@ -18,6 +18,14 @@ The README contains a Mermaid architecture diagram. The bootstrap script itself 
 
 Do not write new tests unless explicitly instructed to. Modifying or extending existing tests is allowed, but only by following an already established test pattern. Do not introduce new types of tests.
 
+## Git
+
+Do not stage, unstage, or commit files, unless explicitly instructed. The user might stage files as they review your work.
+
+## Pre-commit hooks
+
+Check them with `pre-commit run --all-files`.
+
 ## Docstrings
 
 Short and to the point. Describe what the function does without repeating its name. Document `Args:`/`Returns:` only when something important needs to be stated (units, invariants, side effects, edge cases); otherwise omit them.

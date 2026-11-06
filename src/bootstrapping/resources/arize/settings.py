@@ -5,7 +5,7 @@ import os
 
 import httpx
 
-from bootstrapping.common.configuration import ArizeAIProviderConfig, ArizeModelConfig, BootstrapConfig
+from bootstrapping.common.configuration import ArizeAIProviderConfig, ArizeModelConfig, ArizeModelCosts, BootstrapConfig
 from bootstrapping.common.exceptions import BootstrapError
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ mutation PatchProvider($input: PatchGenerativeModelCustomProviderMutationInput!)
 LIST_MODELS = """
 query ListModels($first: Int) {
   generativeModels(first: $first) {
-    edges { node { id name provider namePattern } }
+    edges { node { id name provider namePattern tokenPrices { tokenType costPerMillionTokens kind } } }
   }
 }
 """
@@ -50,12 +50,29 @@ mutation UpdateModel($input: UpdateModelMutationInput!) {
 }
 """
 
-# Phoenix requires at least one input and one output token price; the local
-# models here are free, so both are zero.
-ZERO_COSTS = [
-    {"tokenType": "input", "costPerMillionTokens": 0.0, "kind": "PROMPT"},
-    {"tokenType": "output", "costPerMillionTokens": 0.0, "kind": "COMPLETION"},
-]
+
+def _token_prices(costs: ArizeModelCosts) -> list[dict]:
+    """Phoenix token price entries: input and output are required, other kinds only when set."""
+    prices: list[dict] = []
+    for token_type, kind, price in (
+        ("input", "PROMPT", costs.input),
+        ("output", "COMPLETION", costs.output),
+        ("cache_read", "PROMPT", costs.cache_read),
+        ("cache_write", "PROMPT", costs.cache_write),
+        ("reasoning", "COMPLETION", costs.reasoning),
+    ):
+        if price is not None:
+            prices.append({"tokenType": token_type, "costPerMillionTokens": price, "kind": kind})
+    return prices
+
+
+def _same_prices(existing: list[dict], desired: list[dict]) -> bool:
+    """True when the stored token prices exactly match the desired list."""
+    stored = {(p["kind"], p["tokenType"]): p["costPerMillionTokens"] for p in existing}
+    wanted = {(p["kind"], p["tokenType"]): p["costPerMillionTokens"] for p in desired}
+    if set(stored) != set(wanted):
+        return False
+    return all(abs(stored[key] - wanted[key]) < 1e-9 for key in wanted)
 
 
 def _graphql_request(client: httpx.Client, query: str, variables: dict | None = None, context: str = "") -> dict:
@@ -82,20 +99,17 @@ def _find_provider(client: httpx.Client, name: str) -> dict | None:
     )
 
 
-def _find_model(client: httpx.Client, name: str, provider: str | None) -> dict | None:
-    """Return the generative model with the given name and provider, or None."""
+def _find_model(client: httpx.Client, name: str) -> dict | None:
+    """Return the generative model with the given name, or None. Names are unique in Phoenix."""
     data = _graphql_request(client, LIST_MODELS, {"first": 100})
     models = [edge["node"] for edge in data["generativeModels"]["edges"]]
-    return next(
-        (model for model in models if model["name"] == name and (model["provider"] or "") == (provider or "")),
-        None,
-    )
+    return next((model for model in models if model["name"] == name), None)
 
 
 def _client_config(provider: ArizeAIProviderConfig) -> dict:
     """Phoenix clientConfig payload for the provider's SDK."""
     settings = provider.sdk_specific_settings
-    client_kwargs: dict = {"openaiAuthenticationMethod": {"apiKey": settings.api_key}}
+    client_kwargs: dict = {"openaiAuthenticationMethod": {"apiKey": settings.api_key.get_secret_value()}}
     if settings.api_base_url is not None:
         client_kwargs["openaiClientKwargs"] = {"baseUrl": settings.api_base_url}
     client_kwargs["openaiApiType"] = settings.api_type.graphql_value
@@ -145,13 +159,17 @@ def _model_input(model: ArizeModelConfig) -> dict:
         "name": model.model_name,
         "provider": model.provider,
         "namePattern": model.name_pattern,
-        "costs": ZERO_COSTS,
+        "costs": _token_prices(model.costs),
     }
 
 
 def _ensure_model(client: httpx.Client, model: ArizeModelConfig) -> None:
-    """Create or update the generative model so it matches the config."""
-    existing = _find_model(client, model.model_name, model.provider)
+    """Create or update the generative model so it matches the config.
+
+    Updates also cover provider renames: model names are unique in Phoenix, so
+    an existing model with a stale provider reference is re-synced.
+    """
+    existing = _find_model(client, model.model_name)
     if existing is None:
         _graphql_request(
             client,
@@ -161,7 +179,11 @@ def _ensure_model(client: httpx.Client, model: ArizeModelConfig) -> None:
         )
         logger.info("Created model '%s' in Arize.", model.model_name)
         return
-    if existing["namePattern"] == model.name_pattern:
+    if (
+        existing["namePattern"] == model.name_pattern
+        and (existing["provider"] or "") == (model.provider or "")
+        and _same_prices(existing["tokenPrices"], _token_prices(model.costs))
+    ):
         logger.info("Model '%s' is up to date in Arize - skipping.", model.model_name)
         return
     input_ = {"id": existing["id"], **_model_input(model)}

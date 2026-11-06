@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 CONFIG_DIR = Path("config") / "bootstrapping"
 
@@ -57,11 +57,11 @@ class LlmConnectionConfig(BaseModel):
         return self
 
     @property
-    def api_key(self) -> str:
+    def api_key(self) -> SecretStr:
         """API key from the env var api_key_env_var_name, or dummy if unset."""
         if self.api_key_env_var_name:
-            return os.environ[self.api_key_env_var_name]
-        return "dummy"
+            return SecretStr(os.environ[self.api_key_env_var_name])
+        return SecretStr("dummy")
 
     @property
     def api_base_url(self) -> str | None:
@@ -154,11 +154,11 @@ class ArizeOpenAISettings(BaseModel):
     api_base_url_env_var_name: str | None = None
 
     @property
-    def api_key(self) -> str:
+    def api_key(self) -> SecretStr:
         """API key from the env var api_key_env_var_name, or dummy if unset."""
         if self.api_key_env_var_name:
-            return os.environ[self.api_key_env_var_name]
-        return "dummy"
+            return SecretStr(os.environ[self.api_key_env_var_name])
+        return SecretStr("dummy")
 
     @property
     def api_base_url(self) -> str | None:
@@ -178,12 +178,27 @@ class ArizeAIProviderConfig(BaseModel):
     sdk_specific_settings: ArizeOpenAISettings
 
 
+class ArizeModelCosts(BaseModel):
+    """Token prices for one Arize model, in USD per million tokens.
+
+    Phoenix requires input and output prices; when omitted they are reported as
+    zero. Omitted optional kinds are not reported to Phoenix at all.
+    """
+
+    input: float = 0.0
+    output: float = 0.0
+    cache_read: float | None = None
+    cache_write: float | None = None
+    reasoning: float | None = None
+
+
 class ArizeModelConfig(BaseModel):
     """One generative model provisioned in Arize for cost tracking."""
 
     model_name: str
     name_pattern: str
     provider: str | None = None
+    costs: ArizeModelCosts = Field(default_factory=ArizeModelCosts)
 
     @field_validator("name_pattern")
     @classmethod

@@ -42,18 +42,38 @@ arize:
       local_directories:
         - test
   ai_providers:
-    - provider_name: omlx
-      description: Local oMLX server
+    - provider_name: mlflow_ai_gateway
+      description: MLflow AI Gateway
       sdk: openai
-      provider_string: omlx
+      provider_string: mlflow_ai_gateway
       sdk_specific_settings:
         api_type: chat_completions
-        # api_key_env_var_name: # Optional, if missing use the word dummy for the key
         api_base_url_env_var_name: MLFLOW_AI_GATEWAY_CONTAINER_BASE_URL
   models:
     - model_name: omlx.Qwen3.8-27B-oQ4e-mtp
       name_pattern: Qwen3.8-27B-oQ4e-mtp
-      provider: omlx
+      provider: mlflow_ai_gateway
+    - model_name: bedrock.eu.amazon.nova-2-lite-v1
+      name_pattern: eu\.amazon\.nova-2-lite
+      provider: mlflow_ai_gateway
+      costs:
+        input: 0.374
+        output: 3.157
+        cache_read: 0.0935
+    - model_name: bedrock.eu.amazon.nova-micro-v1
+      name_pattern: eu\.amazon\.nova-micro
+      provider: mlflow_ai_gateway
+      costs:
+        input: 0.04
+        output: 0.16
+        cache_read: 0.01
+    - model_name: bedrock.eu.amazon.nova-pro-v1
+      name_pattern: eu\.amazon\.nova-pro
+      provider: mlflow_ai_gateway
+      costs:
+        input: 0.92
+        output: 3.68
+        cache_read: 0.23
 s3:
   buckets_to_create:
     - mlflow-artifacts
