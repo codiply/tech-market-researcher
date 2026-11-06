@@ -128,10 +128,77 @@ class ArizeDatasetConfig(DatasetSourceConfig):
     description: str | None = None
 
 
+class ArizeProviderSdk(str, Enum):
+    """LLM SDKs Arize (Phoenix) can use to talk to a provider."""
+
+    OPENAI = "openai"
+
+
+class ArizeApiType(str, Enum):
+    """OpenAI API surface the provider serves, as written in the config file."""
+
+    CHAT_COMPLETIONS = "chat_completions"
+    RESPONSES = "responses"
+
+    @property
+    def graphql_value(self) -> str:
+        """Enum value expected by the Phoenix GraphQL API (uppercase)."""
+        return self.value.upper()
+
+
+class ArizeOpenAISettings(BaseModel):
+    """OpenAI-SDK settings for one Arize custom provider."""
+
+    api_type: ArizeApiType
+    api_key_env_var_name: str | None = None
+    api_base_url_env_var_name: str | None = None
+
+    @property
+    def api_key(self) -> str:
+        """API key from the env var api_key_env_var_name, or dummy if unset."""
+        if self.api_key_env_var_name:
+            return os.environ[self.api_key_env_var_name]
+        return "dummy"
+
+    @property
+    def api_base_url(self) -> str | None:
+        """Base URL from the env var api_base_url_env_var_name, or None if unset."""
+        if self.api_base_url_env_var_name:
+            return os.environ.get(self.api_base_url_env_var_name)
+        return None
+
+
+class ArizeAIProviderConfig(BaseModel):
+    """One custom LLM provider provisioned in Arize (Phoenix)."""
+
+    provider_name: str
+    description: str | None = None
+    sdk: ArizeProviderSdk
+    provider_string: str
+    sdk_specific_settings: ArizeOpenAISettings
+
+
+class ArizeModelConfig(BaseModel):
+    """One generative model provisioned in Arize for cost tracking."""
+
+    model_name: str
+    name_pattern: str
+    provider: str | None = None
+
+    @field_validator("name_pattern")
+    @classmethod
+    def _check_name_pattern(cls, pattern: str) -> str:
+        """Phoenix compiles it as a regex to match model ids in spans."""
+        re.compile(pattern)
+        return pattern
+
+
 class ArizeConfig(BaseModel):
     """Arize (Phoenix) settings."""
 
     datasets: list[ArizeDatasetConfig] = []
+    ai_providers: list[ArizeAIProviderConfig] = []
+    models: list[ArizeModelConfig] = []
 
 
 class MlflowConfig(BaseModel):

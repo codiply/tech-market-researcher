@@ -36,6 +36,7 @@ flowchart LR
     main -->|search tool| searxng
     main -.->|search tool - alternative| tavily
     main -->|fetch_page tool| web
+    arize -->|providers call LLMs via gateway| gateway
     gateway -->|local model| macbook
     gateway -.->|cloud model| aws
     searxng -->|queries| engines

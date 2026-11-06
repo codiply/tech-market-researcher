@@ -199,6 +199,10 @@ services:
       # clients upload via this server's REST API, so nothing on the host
       # needs S3 credentials or access to a local artifact path.
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      # Hosts clients may use to reach this server (DNS-rebinding protection).
+      # Replaces MLflow's default list; the :* patterns match port-suffixed
+      # Host headers (e.g. "localhost:5000").
+      MLFLOW_SERVER_ALLOWED_HOSTS: "localhost,localhost:*,127.0.0.1,127.0.0.1:*,mlflow_server,mlflow_server:*"
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-mlflow}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in the environment}
       # Comma-separated list of URL schemes allowed for model provider API bases.

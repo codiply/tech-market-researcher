@@ -262,7 +262,7 @@ def _create_or_update_budget_policies(server_uri: str, config: BootstrapConfig) 
         _ensure_budget_policy(server_uri, budget)
 
 
-def bootstrap_ai_gateway(config: BootstrapConfig) -> None:
+def bootstrap_mlflow_ai_gateway(config: BootstrapConfig) -> None:
     """Provision the AI Gateway: LLM connections, models/endpoints, budget policies."""
     server_uri = os.environ["MLFLOW_SERVER_URI"].rstrip("/")
     _create_llm_connections(server_uri, config)
