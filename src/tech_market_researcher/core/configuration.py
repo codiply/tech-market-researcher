@@ -128,6 +128,21 @@ class ObservabilityConfig(BaseModel):
     arize: ArizeObservabilityConfig = Field(default_factory=ArizeObservabilityConfig)
 
 
+def resolve_model_connection_details(
+    model_providers: dict[str, ModelProviderConfig], model: ModelConfig
+) -> ModelConnectionDetails:
+    """Resolve a model's provider into its full connection details."""
+    provider = model_providers.get(model.provider)
+    if provider is None:
+        available = ", ".join(sorted(model_providers))
+        raise ValueError(f"Unknown model provider '{model.provider}'. Available: {available}.")
+    return ModelConnectionDetails(
+        model_name=model.name,
+        base_url=provider.base_url,
+        api_key=provider.api_key,
+    )
+
+
 class ApplicationConfig(BaseModel):
     """Application settings."""
 
@@ -137,15 +152,7 @@ class ApplicationConfig(BaseModel):
 
     def get_model_connection_details(self, model: ModelConfig) -> ModelConnectionDetails:
         """Resolve a model's provider into its full connection details."""
-        provider = self.model_providers.get(model.provider)
-        if provider is None:
-            available = ", ".join(sorted(self.model_providers))
-            raise ValueError(f"Unknown model provider '{model.provider}'. Available: {available}.")
-        return ModelConnectionDetails(
-            model_name=model.name,
-            base_url=provider.base_url,
-            api_key=provider.api_key,
-        )
+        return resolve_model_connection_details(self.model_providers, model)
 
 
 def load_config(name: str) -> ApplicationConfig:

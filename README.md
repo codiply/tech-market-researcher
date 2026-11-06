@@ -10,10 +10,16 @@ flowchart LR
         main["main / supervisor agent"]
     end
 
+    subgraph evals["Evaluations"]
+        mlflow_evals["MLflow evaluations"]
+    end
+
     subgraph docker["Docker (docker compose)"]
         subgraph mlflow_box["mlflow_server — MLflow"]
             gateway["AI Gateway<br/>/gateway/mlflow/v1"]
             traces["Traces from the agent"]
+            datasets["Datasets"]
+            eval_runs["Evaluation runs"]
         end
         mlflow_db["mlflow_db<br/>Postgres 17"]
         searxng["searxng<br/>SearXNG metasearch"]
@@ -36,6 +42,10 @@ flowchart LR
     main -->|search tool| searxng
     main -.->|search tool - alternative| tavily
     main -->|fetch_page tool| web
+    mlflow_evals -->|runs the agent| main
+    mlflow_evals -->|judge requests| gateway
+    mlflow_evals -->|reads datasets| datasets
+    mlflow_evals -->|evaluation runs| eval_runs
     arize -->|providers call LLMs via gateway| gateway
     gateway -->|local model| macbook
     gateway -.->|cloud model| aws
@@ -49,6 +59,7 @@ flowchart LR
 ```
 
 - **Agent** — an agent built on [LangChain](https://www.langchain.com) [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent). LLM requests go through the [MLflow](https://mlflow.org) AI Gateway; every run is traced back to MLflow.
+- **Evaluations** — the evaluation code runs the agent over the evaluation dataset stored in MLflow and scores each record with an LLM judge that also goes through the AI Gateway; results are stored back as MLflow evaluation runs.
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces.
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
 - **Supporting containers** — [Postgres](https://www.postgresql.org) (MLflow's backend store), [Arize](https://arize.com) (LLM/agent observability) with its own Postgres store, [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI).
@@ -79,6 +90,14 @@ uv run agent_cli
 ```
 
 Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--user-id`, `--conversation-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
+
+## Run the evaluations
+
+```bash
+uv run evals
+```
+
+Runs the agent against the evaluation dataset stored in MLflow; each record is scored by an LLM judge served through the AI Gateway, and the results are stored as MLflow evaluation runs. Flags: `--agent-config-name` (name of the agent config to load, default `base`), `--evals-config-name` (name of the evaluation config under `config/evaluations/mlflow/`, default `main`), and `--platform` (`mlflow` or `arize`; default `mlflow` — only `mlflow` is implemented). Requires the docker compose stack to be running and the dataset to have been bootstrapped.
 
 ## Common commands
 

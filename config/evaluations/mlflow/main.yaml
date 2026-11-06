@@ -1,2 +1,3 @@
 experiment_name: tech-market-researcher-001
 dataset_name: initial_test
+judge_model_name: omlx.Qwen3.8-27B-oQ4e-mtp

@@ -9,10 +9,11 @@ CONFIG_DIR = Path("config") / "evaluations" / "mlflow"
 
 
 class MlflowEvaluationConfig(BaseModel):
-    """Evaluation settings."""
+    """Evaluation settings. The judge runs against an endpoint of the MLflow AI Gateway."""
 
     experiment_name: str
     dataset_name: str
+    judge_model_name: str
 
 
 def load_config(name: str) -> MlflowEvaluationConfig:
