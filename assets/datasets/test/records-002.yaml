@@ -1,0 +1,11 @@
+- input:
+    messages:
+    - role: user
+      content: >-
+        What is the URL for the October 2026 "Ask HN: Who is hiring" thread on
+        Hacker News? In your response, give me only the full url and nothing else.
+  expected_response: https://news.ycombinator.com/item?id=49922569
+  guidelines:
+  - The agent must use a search tool.
+  tags:
+    capability_under_test: search

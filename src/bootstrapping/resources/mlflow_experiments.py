@@ -7,8 +7,9 @@ import mlflow
 from mlflow.exceptions import MlflowException
 
 from bootstrapping.common.configuration import BootstrapConfig, MlflowDatasetConfig
-from bootstrapping.common.datasets import load_records, record_input_hash
 from bootstrapping.common.exceptions import BootstrapError
+from bootstrapping.datasets.loader import load_datasets
+from bootstrapping.datasets.mlflow import record_input_hash, to_mlflow_record
 
 logger = logging.getLogger(__name__)
 
@@ -41,16 +42,16 @@ def _ensure_dataset(client: mlflow.MlflowClient, dataset_config: MlflowDatasetCo
     create duplicates. Records no longer present in the folders are pruned; pruning
     breaks any run/evaluation links to those record ids.
     """
-    records = load_records(dataset_config)
+    records = [to_mlflow_record(r) for r in load_datasets(dataset_config.local_directories)]
     dataset = _find_dataset(client, experiment_id, dataset_config.dataset_name)
     if dataset is None:
         dataset = client.create_dataset(dataset_config.dataset_name, experiment_id)
         logger.info("Created dataset '%s' in experiment '%s'.", dataset_config.dataset_name, dataset_config.experiment)
     else:
         logger.info("Dataset '%s' already exists - reusing.", dataset_config.dataset_name)
-    dataset.merge_records([record.raw for record in records])
+    dataset.merge_records([record.model_dump() for record in records])
     logger.info("Synced %d records to dataset '%s'.", len(records), dataset_config.dataset_name)
-    expected = {record_input_hash(record.inputs) for record in records}
+    expected = {record.input_hash() for record in records}
     stale_ids = [r.dataset_record_id for r in dataset.records if record_input_hash(r.inputs) not in expected]
     if stale_ids:
         deleted = dataset.delete_records(stale_ids)

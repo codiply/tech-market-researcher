@@ -110,7 +110,7 @@ class BudgetPolicyConfig(BaseModel):
 
 
 class DatasetSourceConfig(BaseModel):
-    """A dataset sourced from JSON files in local folders under assets/datasets/."""
+    """A dataset sourced from YAML files in local folders under assets/datasets/."""
 
     dataset_name: str
     local_directories: list[str] = []
