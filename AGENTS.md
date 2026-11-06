@@ -14,6 +14,10 @@ Always pin docker images in `docker-compose.yml` to a specific version tag, neve
 
 The README contains a Mermaid architecture diagram. The bootstrap script itself is not part of the diagram, but the connections it establishes between components are. Remind the user to update it whenever the implementation changes and the diagram no longer matches.
 
+## Tests
+
+Do not write new tests unless explicitly instructed to. Modifying or extending existing tests is allowed, but only by following an already established test pattern. Do not introduce new types of tests.
+
 ## Docstrings
 
 Short and to the point. Describe what the function does without repeating its name. Document `Args:`/`Returns:` only when something important needs to be stated (units, invariants, side effects, edge cases); otherwise omit them.
