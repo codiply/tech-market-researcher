@@ -10,9 +10,9 @@ Always pin dependencies in `pyproject.toml` with three-component compatible-rele
 
 Always pin docker images in `docker-compose.yml` to a specific version tag, never `latest`.
 
-## Architecture diagram
+## Architecture diagrams
 
-The README contains a Mermaid architecture diagram. The bootstrap script itself is not part of the diagram, but the connections it establishes between components are. Remind the user to update it whenever the implementation changes and the diagram no longer matches.
+The diagrams live in `design.md` (linked from the README). The main architecture diagram does not include the bootstrap script itself; the separate `Bootstrapping` diagram covers the services it provisions. Node names should stay consistent between the diagrams. Remind the user to update them whenever the implementation changes and a diagram no longer matches.
 
 ## Tests
 
