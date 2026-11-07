@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 CONFIG_DIR = Path("config") / "bootstrapping"
 
@@ -20,6 +20,8 @@ class LlmProvider(str, Enum):
 
 class EndpointConfig(BaseModel):
     """One gateway endpoint, each serving a single model."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     model_name: str
@@ -38,6 +40,8 @@ class EndpointConfig(BaseModel):
 
 class LlmConnectionConfig(BaseModel):
     """One LLM connection exposed through the MLflow gateway."""
+
+    model_config = ConfigDict(extra="forbid")
 
     api_key_name: str
     provider: LlmProvider
@@ -104,6 +108,8 @@ class BudgetPolicyAction(str, Enum):
 class BudgetPolicyConfig(BaseModel):
     """One global AI gateway budget policy."""
 
+    model_config = ConfigDict(extra="forbid")
+
     amount_usd: float = Field(gt=0)
     reset_period: BudgetPolicyResetPeriod
     action: BudgetPolicyAction
@@ -116,6 +122,8 @@ class DatasetFiltersConfig(BaseModel):
     with the attribute, False only records without it.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     has_expected_response: bool | None = None
     has_expected_facts: bool | None = None
     has_guidelines: bool | None = None
@@ -123,6 +131,8 @@ class DatasetFiltersConfig(BaseModel):
 
 class DatasetSourceConfig(BaseModel):
     """A dataset sourced from YAML files in local folders under assets/datasets/."""
+
+    model_config = ConfigDict(extra="forbid")
 
     dataset_name: str
     local_directories: list[str] = []
@@ -162,6 +172,8 @@ class ArizeApiType(str, Enum):
 class ArizeOpenAISettings(BaseModel):
     """OpenAI-SDK settings for one Arize custom provider."""
 
+    model_config = ConfigDict(extra="forbid")
+
     api_type: ArizeApiType
     api_key_env_var_name: str | None = None
     api_base_url_env_var_name: str | None = None
@@ -184,6 +196,8 @@ class ArizeOpenAISettings(BaseModel):
 class ArizeAIProviderConfig(BaseModel):
     """One custom LLM provider provisioned in Arize (Phoenix)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     provider_name: str
     description: str | None = None
     sdk: ArizeProviderSdk
@@ -198,6 +212,8 @@ class ArizeModelCosts(BaseModel):
     zero. Omitted optional kinds are not reported to Phoenix at all.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     input: float = 0.0
     output: float = 0.0
     cache_read: float | None = None
@@ -207,6 +223,8 @@ class ArizeModelCosts(BaseModel):
 
 class ArizeModelConfig(BaseModel):
     """One generative model provisioned in Arize for cost tracking."""
+
+    model_config = ConfigDict(extra="forbid")
 
     model_name: str
     name_pattern: str
@@ -224,6 +242,8 @@ class ArizeModelConfig(BaseModel):
 class ArizeConfig(BaseModel):
     """Arize (Phoenix) settings."""
 
+    model_config = ConfigDict(extra="forbid")
+
     datasets: list[ArizeDatasetConfig] = []
     ai_providers: list[ArizeAIProviderConfig] = []
     models: list[ArizeModelConfig] = []
@@ -231,6 +251,8 @@ class ArizeConfig(BaseModel):
 
 class MlflowConfig(BaseModel):
     """MLflow AI Gateway settings."""
+
+    model_config = ConfigDict(extra="forbid")
 
     llm_connections: list[LlmConnectionConfig]
     endpoints: list[EndpointConfig] = []
@@ -257,11 +279,15 @@ class MlflowConfig(BaseModel):
 class S3Config(BaseModel):
     """S3 (MinIO) artifact storage settings."""
 
+    model_config = ConfigDict(extra="forbid")
+
     buckets_to_create: list[str]
 
 
 class DebuggingConfig(BaseModel):
     """Debugging aids; disabled by default."""
+
+    model_config = ConfigDict(extra="forbid")
 
     # Dump rendered Jinja dataset templates into .debug/datasets/<dir>/<file>.yaml.
     dump_rendered_datasets: bool = False
@@ -269,6 +295,8 @@ class DebuggingConfig(BaseModel):
 
 class BootstrapConfig(BaseModel):
     """Application settings."""
+
+    model_config = ConfigDict(extra="forbid")
 
     mlflow: MlflowConfig
     s3: S3Config

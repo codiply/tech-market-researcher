@@ -5,7 +5,7 @@ from importlib.metadata import version
 
 PACKAGE_VERSION = version("tech-market-researcher")
 
-DEFAULT_CONFIG_NAME = "base"
+DEFAULT_CONFIG_NAME = "dev"
 
 DEFAULT_USER_ID = "codiply"
 DEFAULT_CONVERSATION_ID = "conversation-0001"

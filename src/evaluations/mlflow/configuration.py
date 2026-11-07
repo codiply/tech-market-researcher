@@ -57,6 +57,8 @@ class ScorersConfig(BaseModel):
 class MlflowEvaluationConfig(BaseModel):
     """Evaluation settings. The judge runs against an endpoint of the MLflow AI Gateway."""
 
+    model_config = ConfigDict(extra="forbid")
+
     experiment_name: str
     dataset_name: str
     judge_model_name: str

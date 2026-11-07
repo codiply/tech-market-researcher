@@ -1,0 +1,3 @@
+search:
+  provider: alpha
+  timeout: 30

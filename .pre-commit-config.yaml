@@ -43,6 +43,13 @@ repos:
         types: [python]
         require_serial: true
 
+      - id: unit_tests
+        name: run unit tests
+        description: "Run unit tests"
+        entry: .venv/bin/pytest tests/unit/
+        language: system
+        pass_filenames: false
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.0
     hooks:

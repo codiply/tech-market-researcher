@@ -17,3 +17,6 @@ mlruns/
 
 # Debugging artifacts
 .debug/
+
+# Local config overrides (never committed)
+config/**/*.local.yaml

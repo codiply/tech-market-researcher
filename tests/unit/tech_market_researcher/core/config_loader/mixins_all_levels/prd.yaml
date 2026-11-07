@@ -1,0 +1,3 @@
+app: prd-app
+_mixins:
+  - prd_mix

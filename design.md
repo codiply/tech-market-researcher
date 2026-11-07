@@ -118,6 +118,42 @@ Evaluation flow, step by step:
 - **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Arize. It can load multiple datasets and merge them into a single MLflow or Arize dataset.
 - **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow.
 
+## Configuration
+
+Configs live in `config/` (agent configs under `config/agent/`) and are resolved by a generic `ConfigLoader` (`src/tech_market_researcher/core/config_loader.py`). For a config name `X`, the loader merges these layers, in this order (later layers win):
+
+1. **Common config** — `_common.yaml` (optional): the shared baseline shared by all configs.
+2. **Named config** — `X.yaml` (required): the per-environment config (e.g. `dev.yaml`, `prd.yaml`). A missing named file is an error.
+3. **Local override** — `X.local.yaml` (optional): machine-local tweaks. Ignored by `validate_all_configs` and git-ignored (`config/**/*.local.yaml`), so it is never committed.
+
+```mermaid
+flowchart LR
+    common["_common.yaml<br/>(optional)"]
+    common_mixins["mixins/*.yaml<br/>declared by _common.yaml"]
+    named["X.yaml<br/>(required)"]
+    named_mixins["mixins/*.yaml<br/>declared by X.yaml"]
+    local["X.local.yaml<br/>(optional, not committed)"]
+    local_mixins["mixins/*.yaml<br/>declared by X.local.yaml"]
+    merge["Deep merge<br/>later layers win"]
+    validated["ApplicationConfig<br/>pydantic, extra=forbid"]
+
+    common --> common_mixins
+    common_mixins --> named
+    named --> named_mixins
+    named_mixins --> local
+    local --> local_mixins
+    common_mixins --> merge
+    named_mixins --> merge
+    local_mixins --> merge
+    merge --> validated
+```
+
+- **Deep merge** — dicts are merged recursively; scalars and arrays are replaced, never concatenated, so a later layer fully overrides a key.
+- **Mixins** — any of the three layers may declare a `_mixins` list; each entry references `mixins/<name>.yaml`, which is merged on top of the layer that declares it (in declaration order). Mixins let shared fragments be reused across configs and local overrides; the `_mixins` field itself is dropped before validation. The `mixins/` folder is committed like the rest of the configs.
+- **Validation** — the merged result is validated into a pydantic model (`ApplicationConfig` for the agent) with `extra="forbid"`, so a typo'd key in any YAML file fails at load time. `ConfigLoader.validate_all_configs()` loads every named config (without local overrides) so committed configs are checked by the unit tests and pre-commit.
+- **Local overrides** — files named `X.local.yaml` are the mechanism for per-machine changes (e.g. pointing `dev` at a different local model) without touching committed files.
+- **Loader configuration** — the loader is configurable via its constructor, e.g. base folder, common config filename, mixins folder, mixins field name, local-override infix, and file extension.
+
 ## Developer Setup
 
 ```mermaid

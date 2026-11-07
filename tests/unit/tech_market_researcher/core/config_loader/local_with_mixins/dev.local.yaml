@@ -1,0 +1,4 @@
+_mixins:
+  - search_override
+model:
+  name: local-model

@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-DEFAULT_AGENT_CONFIG_NAME = "base"
+DEFAULT_AGENT_CONFIG_NAME = "dev"
 DEFAULT_EVALS_CONFIG_NAME = "main"
 
 
