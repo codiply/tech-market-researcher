@@ -10,7 +10,9 @@ from pathlib import Path
 import jinja2
 import yaml
 
+from bootstrapping.common.configuration import DatasetFiltersConfig
 from bootstrapping.common.exceptions import BootstrapError
+from bootstrapping.datasets.filtering import apply_filters
 from bootstrapping.datasets.model import DatasetRecord
 
 logger = logging.getLogger(__name__)
@@ -76,3 +78,10 @@ def load_datasets(names: list[str], dump_rendered: bool = False) -> list[Dataset
                 if not record.disabled:
                     records.append(record)
     return records
+
+
+def load_filtered_datasets(
+    names: list[str], filters: DatasetFiltersConfig, dump_rendered: bool = False
+) -> list[DatasetRecord]:
+    """Load every record from the named dataset folders, then apply the filters."""
+    return apply_filters(load_datasets(names, dump_rendered), filters)

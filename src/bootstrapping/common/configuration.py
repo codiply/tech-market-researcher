@@ -109,11 +109,23 @@ class BudgetPolicyConfig(BaseModel):
     action: BudgetPolicyAction
 
 
+class DatasetFiltersConfig(BaseModel):
+    """Record predicates for cherry-picking a subset of a dataset's folders.
+
+    Each field is optional: None matches both cases, True selects only records
+    with the attribute, False only records without it.
+    """
+
+    has_expected_response: bool | None = None
+    has_guidelines: bool | None = None
+
+
 class DatasetSourceConfig(BaseModel):
     """A dataset sourced from YAML files in local folders under assets/datasets/."""
 
     dataset_name: str
     local_directories: list[str] = []
+    filters: DatasetFiltersConfig = Field(default_factory=DatasetFiltersConfig)
 
 
 class MlflowDatasetConfig(DatasetSourceConfig):

@@ -31,16 +31,27 @@ mlflow:
       reset_period: weekly
       action: reject
   datasets:
-    - experiment: tech-market-researcher-001
-      dataset_name: initial_test
+    - experiment: tech-market-researcher-evals
+      dataset_name: with_expected_response
       local_directories:
-        - test
-
+        - human_generated
+      filters:
+        has_expected_response: true
+    - experiment: tech-market-researcher-evals
+      dataset_name: with_guideline
+      local_directories:
+        - human_generated
+      filters:
+        has_guidelines: true
+    - experiment: tech-market-researcher-evals
+      dataset_name: mixed
+      local_directories:
+        - human_generated
 arize:
   datasets:
     - dataset_name: initial_test
       local_directories:
-        - test
+        - human_generated
   ai_providers:
     - provider_name: mlflow_ai_gateway
       description: MLflow AI Gateway

@@ -8,7 +8,7 @@ import httpx
 from bootstrapping.common.configuration import ArizeDatasetConfig, BootstrapConfig
 from bootstrapping.common.exceptions import BootstrapError
 from bootstrapping.datasets.arize import ArizeExample, to_arize_example
-from bootstrapping.datasets.loader import load_datasets
+from bootstrapping.datasets.loader import load_filtered_datasets
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,8 @@ def _ensure_dataset(client: httpx.Client, dataset_config: ArizeDatasetConfig, du
     examples. Each mutating upload creates a new immutable dataset version, which experiments
     pin to for reproducible evaluations.
     """
-    examples = [to_arize_example(r) for r in load_datasets(dataset_config.local_directories, dump_rendered)]
+    loaded = load_filtered_datasets(dataset_config.local_directories, dataset_config.filters, dump_rendered)
+    examples = [to_arize_example(r) for r in loaded]
     payload = ArizeExample.to_payload(dataset_config.dataset_name, examples)
     if _find_dataset(client, dataset_config.dataset_name) is None:
         payload["action"] = "create"

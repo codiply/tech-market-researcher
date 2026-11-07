@@ -17,13 +17,13 @@ class MlflowExpectations(BaseModel):
     """The expectations attached to an MLflow dataset record."""
 
     guidelines: list[str] | None = None
+    expected_response: object | None = None
 
 
 class MlflowDatasetRecord(BaseModel):
     """One record as stored in an MLflow evaluation dataset."""
 
     inputs: dict[str, object]
-    outputs: dict[str, object] | None = None
     expectations: MlflowExpectations | None = None
     tags: dict[str, str] | None = None
 
@@ -34,13 +34,16 @@ class MlflowDatasetRecord(BaseModel):
 
 def to_mlflow_record(record: DatasetRecord) -> MlflowDatasetRecord:
     """Map a local dataset record to its MLflow representation."""
-    outputs: dict[str, object] | None = (
-        {"expected_response": record.expected_response} if record.expected_response else None
+    expectations = (
+        MlflowExpectations(
+            guidelines=record.guidelines or None,
+            expected_response=record.expected_response or None,
+        )
+        if (record.guidelines or record.expected_response)
+        else None
     )
-    expectations = MlflowExpectations(guidelines=record.guidelines) if record.guidelines else None
     return MlflowDatasetRecord(
         inputs=record.input.model_dump(),
-        outputs=outputs,
         expectations=expectations,
         tags=record.tags or None,
     )
