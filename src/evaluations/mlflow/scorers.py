@@ -26,6 +26,8 @@ def _judge_model(config: MlflowEvaluationConfig, scorer_config: BaseScorerConfig
     return f"gateway:/{scorer_config.model_name_override or config.judge_model_name}"
 
 
+# The built-in scorers are defined in MLflow here:
+# https://raw.githubusercontent.com/mlflow/mlflow/refs/heads/master/mlflow/genai/scorers/builtin_scorers.py
 def build_scorers_list(config: MlflowEvaluationConfig) -> list[Scorer]:  # pylint: disable=too-many-branches
     """Build the scorers enabled in the config; the judge goes through the AI Gateway."""
     scorers: list[Scorer] = []
