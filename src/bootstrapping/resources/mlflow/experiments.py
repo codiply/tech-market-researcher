@@ -9,9 +9,12 @@ from mlflow.exceptions import MlflowException
 from bootstrapping.common.configuration import BootstrapConfig, MlflowDatasetConfig
 from bootstrapping.common.exceptions import BootstrapError
 from bootstrapping.datasets.loader import load_filtered_datasets
-from bootstrapping.datasets.mlflow import record_input_hash, to_mlflow_record
+from bootstrapping.datasets.mlflow import MlflowDatasetRecord, record_input_hash, to_mlflow_record
 
 logger = logging.getLogger(__name__)
+
+# Sentinel distinguishing "no local record with this input hash" from local expectations of None.
+_MISSING = object()
 
 
 def _ensure_experiment(client: mlflow.MlflowClient, name: str) -> str:
@@ -35,14 +38,21 @@ def _find_dataset(
     return None
 
 
+def _expected_expectations(record: MlflowDatasetRecord) -> dict | None:
+    """The expectations the record should carry in MLflow, as stored by the server."""
+    return record.expectations.model_dump(exclude_none=True) if record.expectations else None
+
+
 def _ensure_dataset(
     client: mlflow.MlflowClient, experiment_id: str, dataset_config: MlflowDatasetConfig, dump_rendered: bool
 ) -> None:
     """Create the dataset if missing, then sync its records with the configured ones.
 
     Records are upserted by the server (keyed on the inputs hash), so re-runs do not
-    create duplicates. Records no longer present in the folders are pruned; pruning
-    breaks any run/evaluation links to those record ids.
+    create duplicates. Records no longer present in the folders are pruned, and records
+    whose stored expectations differ from the folders are re-inserted with a new record
+    id (the server merge can only add expectation keys, never remove them). Both pruning
+    and re-insertion break any run/evaluation links to those record ids.
     """
     loaded = load_filtered_datasets(dataset_config.local_directories, dataset_config.filters, dump_rendered)
     records = [to_mlflow_record(r) for r in loaded]
@@ -52,17 +62,21 @@ def _ensure_dataset(
         logger.info("Created dataset '%s' in experiment '%s'.", dataset_config.dataset_name, dataset_config.experiment)
     else:
         logger.info("Dataset '%s' already exists - reusing.", dataset_config.dataset_name)
-    dataset.merge_records([record.model_dump(exclude_none=True) for record in records])
-    logger.info("Synced %d records to dataset '%s'.", len(records), dataset_config.dataset_name)
-    expected = {record.input_hash() for record in records}
-    stale_ids = [r.dataset_record_id for r in dataset.records if record_input_hash(r.inputs) not in expected]
+    local = {record.input_hash(): _expected_expectations(record) for record in records}
+    stale_ids = [
+        r.dataset_record_id
+        for r in dataset.records
+        if local.get(record_input_hash(r.inputs), _MISSING) != r.expectations
+    ]
     if stale_ids:
         deleted = dataset.delete_records(stale_ids)
         logger.info(
-            "Pruned %d records from dataset '%s' no longer present in the folders.",
+            "Pruned %d records from dataset '%s' missing or out of sync with the folders.",
             deleted,
             dataset_config.dataset_name,
         )
+    dataset.merge_records([record.model_dump(exclude_none=True) for record in records])
+    logger.info("Synced %d records to dataset '%s'.", len(records), dataset_config.dataset_name)
 
 
 def bootstrap_mlflow_experiments(config: BootstrapConfig) -> None:
