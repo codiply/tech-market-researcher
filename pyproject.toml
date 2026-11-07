@@ -6,6 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Panagiotis Katsaroumpas", email = "codiply@gmail.com" }
 ]
+license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
     "deepagents~=0.7.32",

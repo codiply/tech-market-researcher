@@ -112,3 +112,7 @@ chmod +x .git/hooks/pre-push
 
 - [LangChain Deep Agents documentation](https://docs.langchain.com/oss/python/deepagents/overview) — docs for the `deepagents` framework the agent is built on.
 - [Evaluating and Improving Agentic Applications](https://learn.deeplearning.ai/courses/evaluating-and-improving-agentic-applications) — DeepLearning.AI course on evaluating and improving agents, which uses Arize.
+
+## License
+
+Licensed under the [MIT License](LICENSE).
