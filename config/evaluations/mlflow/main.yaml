@@ -1,3 +1,40 @@
 experiment_name: tech-market-researcher-evals
 dataset_name: mixed
 judge_model_name: omlx.Qwen3.8-27B-oQ4e-mtp
+# judge_model_name: bedrock.eu.amazon.nova-2-lite-v1
+scorers:
+  completeness:
+    enabled: true
+  correctness:
+    enabled: true
+  equivalence:
+    enabled: true
+  expectations_guidelines:
+    enabled: true
+  fluency:
+    enabled: true
+  guidelines:
+    enabled: true
+    instances:
+      - name: language_english
+        guidelines:
+          - The text must be written in English.
+      - name: tone_professional
+        guidelines:
+          - The text must maintain a professional tone.
+  relevance_to_query:
+    enabled: true
+  retrieval_groundedness:
+    enabled: true
+  retrieval_relevance:
+    enabled: true
+  retrieval_sufficiency:
+    enabled: true
+  safety:
+    enabled: true
+  summarization:
+    enabled: true
+  tool_call_correctness:
+    enabled: true
+  tool_call_efficiency:
+    enabled: true

@@ -17,5 +17,6 @@ class DatasetRecord(BaseModel):
     input: Input
     disabled: bool = False
     expected_response: object | None = None
+    expected_facts: list[str] | None = None
     guidelines: list[str] = []
     tags: dict[str, str] = {}

@@ -117,6 +117,7 @@ class DatasetFiltersConfig(BaseModel):
     """
 
     has_expected_response: bool | None = None
+    has_expected_facts: bool | None = None
     has_guidelines: bool | None = None
 
 

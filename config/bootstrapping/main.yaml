@@ -44,6 +44,12 @@ mlflow:
       filters:
         has_guidelines: true
     - experiment: tech-market-researcher-evals
+      dataset_name: with_expected_facts
+      local_directories:
+        - human_generated
+      filters:
+        has_expected_facts: true
+    - experiment: tech-market-researcher-evals
       dataset_name: mixed
       local_directories:
         - human_generated

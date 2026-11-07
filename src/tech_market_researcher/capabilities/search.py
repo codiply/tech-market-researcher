@@ -7,6 +7,7 @@ import os
 from typing import Annotated, Literal
 
 import httpx
+import mlflow
 from langchain.tools import InjectedToolArg, tool
 from langchain_core.tools import BaseTool
 from tavily import TavilyClient
@@ -21,6 +22,17 @@ SEARCH_MAX_RESULT_COUNT_MAX = 25
 def _get_tavily_client() -> TavilyClient:
     """Lazily build the Tavily client so import does not require the API key."""
     return TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+
+
+def _to_retriever_chunks(results: list[dict]) -> list[dict]:
+    """Shape raw search results into the document chunks a RETRIEVER span reports."""
+    return [
+        {
+            "content": f"{result['title']}\n{result.get('content') or ''}".strip(),
+            "metadata": {"doc_uri": result["url"], "title": result["title"]},
+        }
+        for result in results
+    ]
 
 
 def _format_results(query: str, results: list[dict]) -> str:
@@ -52,12 +64,16 @@ def tavily_search(
         Numbered search results with title, URL and snippet
     """
     effective_max_results = min(max_results, SEARCH_MAX_RESULT_COUNT_MAX)
-    search_results = _get_tavily_client().search(
-        query,
-        max_results=effective_max_results,
-        topic=topic,
-    )
-    return _format_results(query, search_results.get("results", []))
+    with mlflow.start_span(name="tavily_search", span_type="RETRIEVER") as span:
+        span.set_inputs({"query": query, "max_results": effective_max_results, "topic": topic})
+        search_results = _get_tavily_client().search(
+            query,
+            max_results=effective_max_results,
+            topic=topic,
+        )
+        results = search_results.get("results", [])
+        span.set_outputs(_to_retriever_chunks(results))
+    return _format_results(query, results)
 
 
 @tool(parse_docstring=True)
@@ -77,14 +93,17 @@ def searxng_search(
     Returns:
         Numbered search results with title, URL and snippet
     """
-    response = httpx.get(
-        f"{SEARXNG_URL}/search",
-        params={"q": query, "format": "json"},
-        timeout=60.0,
-    )
-    response.raise_for_status()
     effective_max_results = min(max_results, SEARCH_MAX_RESULT_COUNT_MAX)
-    results = response.json().get("results", [])[:effective_max_results]
+    with mlflow.start_span(name="searxng_search", span_type="RETRIEVER") as span:
+        span.set_inputs({"query": query, "max_results": effective_max_results})
+        response = httpx.get(
+            f"{SEARXNG_URL}/search",
+            params={"q": query, "format": "json"},
+            timeout=60.0,
+        )
+        response.raise_for_status()
+        results = response.json().get("results", [])[:effective_max_results]
+        span.set_outputs(_to_retriever_chunks(results))
     return _format_results(query, results)
 
 

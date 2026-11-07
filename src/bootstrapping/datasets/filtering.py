@@ -16,6 +16,10 @@ def apply_filters(records: list[DatasetRecord], filters: DatasetFiltersConfig) -
             has_expected_response = record.expected_response is not None
             if has_expected_response != filters.has_expected_response:
                 return False
+        if filters.has_expected_facts is not None:
+            has_expected_facts = record.expected_facts is not None
+            if has_expected_facts != filters.has_expected_facts:
+                return False
         if filters.has_guidelines is not None:
             has_guidelines = len(record.guidelines) > 0
             if has_guidelines != filters.has_guidelines:

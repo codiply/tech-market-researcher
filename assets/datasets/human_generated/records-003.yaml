@@ -1,0 +1,9 @@
+- input:
+    messages:
+    - role: user
+      content: "What is MLflow?"
+  expected_facts:
+    - "MLflow is open-source"
+    - "It is an AI engineering platform"
+  tags:
+    capability_under_test: search

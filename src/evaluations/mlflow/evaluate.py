@@ -5,10 +5,11 @@ from typing import Any
 
 import mlflow
 from langgraph.graph.state import CompiledStateGraph
-from mlflow.genai.scorers import ExpectationsGuidelines, Scorer
+from mlflow.genai.scorers import Scorer
 
 from evaluations.common.runtime_context import build_runtime_context
 from evaluations.mlflow.configuration import MlflowEvaluationConfig
+from evaluations.mlflow.scorers import build_scorers_list
 
 Agent = CompiledStateGraph[Any, Any]
 
@@ -37,7 +38,7 @@ def mlflow_evaluate(config: MlflowEvaluationConfig, agent: Agent) -> None:
     data = [
         {"inputs": record.inputs, "expectations": record.expectations}
         for record in dataset.records
-        if record.expectations and record.expectations.get("guidelines")
+        if record.expectations
     ]
 
     def predict_fn(messages: list[dict[str, str]], context: dict[str, str]) -> str:
@@ -45,5 +46,5 @@ def mlflow_evaluate(config: MlflowEvaluationConfig, agent: Agent) -> None:
         return _predict_fn_for(agent, messages, context)
 
     # The judge runs against the AI Gateway endpoint of the active tracking server.
-    scorers: list[Scorer] = [ExpectationsGuidelines(model=f"gateway:/{config.judge_model_name}")]
+    scorers: list[Scorer] = build_scorers_list(config)
     mlflow.genai.evaluate(data=data, predict_fn=predict_fn, scorers=scorers)
