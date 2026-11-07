@@ -62,31 +62,6 @@ flowchart LR
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
 - **Supporting containers** — [Postgres](https://www.postgresql.org) (MLflow's backend store), [Arize](https://arize.com) (LLM/agent observability) with its own Postgres store, [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI).
 
-## Evaluations
-
-```mermaid
-flowchart LR
-    repo["Datasets<br/>(git repo)"]
-    jinja["Jinja rendering<br/>(prompt templates)"]
-    loader["Loader<br/>filtering"]
-    mlflow_ds["MLflow<br/>datasets"]
-    arize_ds["Arize<br/>datasets"]
-    evals["Evals script"]
-
-    repo --> jinja
-    jinja --> loader
-    loader -->|loads| mlflow_ds
-    loader -->|loads| arize_ds
-    mlflow_ds -->|loads dataset| evals
-```
-
-Evaluation flow, step by step:
-
-- **Datasets** — stored in the git repo as the source of truth.
-- **Jinja logic** — dataset records can use Jinja templating to render prompts before they are sent to the agent.
-- **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Arize. It can load multiple datasets and merge them into a single MLflow or Arize dataset.
-- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow.
-
 ## Bootstrapping
 
 The bootstrap script provisions the services below (node names match the Main Architecture diagram). It is intentionally not part of the main diagram.
@@ -117,3 +92,71 @@ The script runs in this order:
 2. **MLflow AI Gateway** — registers gateways and models.
 3. **MLflow** — creates experiments and loads the (filtered) datasets.
 4. **Arize** — loads datasets, then configures its custom LLM providers and models to point at the MLflow AI Gateway (so this must come after the gateway is set up).
+
+## Evaluations
+
+```mermaid
+flowchart LR
+    repo["Datasets<br/>(git repo)"]
+    jinja["Jinja rendering<br/>(prompt templates)"]
+    loader["Loader<br/>filtering"]
+    mlflow_ds["MLflow<br/>datasets"]
+    arize_ds["Arize<br/>datasets"]
+    evals["Evals script"]
+
+    repo --> jinja
+    jinja --> loader
+    loader -->|loads| mlflow_ds
+    loader -->|loads| arize_ds
+    mlflow_ds -->|loads dataset| evals
+```
+
+Evaluation flow, step by step:
+
+- **Datasets** — stored in the git repo as the source of truth.
+- **Jinja logic** — dataset records can use Jinja templating to render prompts before they are sent to the agent.
+- **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Arize. It can load multiple datasets and merge them into a single MLflow or Arize dataset.
+- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow.
+
+## Developer Setup
+
+```mermaid
+flowchart TB
+    subgraph home["Home network"]
+        subgraph mac["Newer MacBook (M5 Pro)"]
+            omix["OMLX server<br/>e.g. Qwen3.8-27B-oQ4e-mtp"]
+        end
+        subgraph laptop["Older MacBook (host)"]
+            vscode["VS Code"]
+            browser["Browser"]
+            subgraph vm["Ubuntu VM (VMware)"]
+                code["Code (git repo)"]
+                subgraph docker["Docker (docker compose)"]
+                    gateway["AI Gateway<br/>/gateway/mlflow/v1"]
+                    mlflow_ui["MLflow UI"]
+                    arize["Arize"]
+                end
+                main["Tech Market Researcher Agent<br/>(main / supervisor)"]
+                subgraph cli["CLI"]
+                    pi["Pi (agentic harness)"]
+                end
+            end
+        end
+    end
+    aws["AWS Bedrock<br/>e.g. eu.amazon.nova-2-lite-v1"]
+
+    vscode -->|SSH| cli
+    vscode -->|Remote-SSH extension| code
+    browser -->|VS Code exposes VM ports on 0.0.0.0| mlflow_ui
+    browser -->|VS Code exposes VM ports on 0.0.0.0| arize
+    pi -->|LLM requests| omix
+    cli -->|runs| main
+    main --> gateway
+    gateway -->|local model| omix
+    gateway -->|cloud model via Bedrock long-term API key| aws
+```
+
+- **Newer MacBook (M5 Pro)** — dedicated to serving models through [OMLX](https://omlx.ai/), reachable over the local network. Its wired memory limit is raised as high as possible and no other applications run on it, so it is used for model serving only.
+- **Older MacBook (host)** — runs VS Code on the host, which opens a remote CLI in the Ubuntu VM over SSH and edits the code in the VM directly using the Remote-SSH extension. A browser on the host is used to view the MLflow and Arize UIs; VS Code exposes the VM's service ports on 0.0.0.0 on the host. [VMware](https://www.vmware.com/) hosts the Ubuntu VM on this machine.
+- **Ubuntu VM** — stores the code (the git repo) and runs all the scripts, the Docker services, and the [Pi](https://pi.dev) agentic harness. The Tech Market Researcher Agent is run from the CLI. It is deliberately a sandbox: it holds no secrets other than the ones this project needs and no personal user data.
+- **Models** — Pi talks directly to the OMLX server; the DeepAgents agent goes through the MLflow AI Gateway, which routes to the OMLX server (default) or to [AWS Bedrock](https://aws.amazon.com/bedrock/). The gateway uses a long-term Bedrock API key to access Bedrock, which grants access to specific models only (Amazon Nova) and can be activated or deactivated at will.
