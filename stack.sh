@@ -14,9 +14,10 @@ fi
 
 cmd="${1:-}"
 if [[ -z "$cmd" ]]; then
-  echo "Usage: $0 <up|down|ps|logs|restart|pull|build> [extra args...]" >&2
+  echo "Usage: $0 <up|down|ps|logs|restart|pull|build|bootstrap> [extra args...]" >&2
   echo "Examples:" >&2
-  echo "  $0 up -d        # start the stack, then provision the MLflow gateway" >&2
+  echo "  $0 up -d        # start the stack, then run the bootstrap" >&2
+  echo "  $0 bootstrap    # re-run the (idempotent) bootstrap, e.g. after updating its config" >&2
   echo "  $0 build        # build (or rebuild) the local images" >&2
   echo "  $0 down         # stop and remove containers" >&2
   echo "  $0 ps           # show container status" >&2
@@ -110,7 +111,7 @@ sys.exit(0 if body.get("data") is not None and not body.get("errors") else 1)
   return 1
 }
 
-# Bootstrap the MLflow stack (idempotent).
+# Bootstrap the stack (idempotent): S3, MLflow, and Arize resources.
 # MLFLOW_TRACKING_USERNAME attributes dataset records to the automation instead of the local user.
 # (read_mlflow_creds() only looks at MLFLOW_TRACKING_USERNAME, not MLFLOW_USER.)
 bootstrap() {
@@ -123,6 +124,10 @@ case "$cmd" in
   up|restart)
     ensure_storage_dirs
     docker compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" "$cmd" "$@"
+    bootstrap
+    exit $?
+    ;;
+  bootstrap)
     bootstrap
     exit $?
     ;;

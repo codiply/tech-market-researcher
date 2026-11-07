@@ -12,6 +12,8 @@ See [design.md](design.md) for the design and architecture diagrams.
 ./stack.sh up -d
 ```
 
+This also runs the bootstrap, which provisions the stack's resources (S3, MLflow, Arize) from `config/`. It is idempotent; re-run it any time with `./stack.sh bootstrap` (e.g. after updating the bootstrap config).
+
 The stack exposes:
 
 | Service | URL | Notes |
@@ -47,6 +49,7 @@ Runs the agent against the evaluation dataset stored in MLflow; each record is s
 ./stack.sh ps                      # status
 ./stack.sh logs -f mlflow_server   # follow one service
 ./stack.sh down                    # stop and remove containers
+./stack.sh bootstrap               # re-run the (idempotent) bootstrap, e.g. after updating its config
 ```
 
 ## Pre-commit hooks

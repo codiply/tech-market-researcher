@@ -15,7 +15,7 @@ load_dotenv()
 
 
 def main() -> None:
-    """Provision the MLflow stack from config."""
+    """Provision the stack's resources from config."""
     logging.basicConfig(level=logging.INFO)
     config = load_config("main")
     bootstrap_s3(config)
