@@ -5,10 +5,10 @@ import re
 from enum import Enum
 from pathlib import Path
 
-import yaml
 from pydantic import Field, SecretStr, field_validator, model_validator
 
 from tech_market_researcher.core.common import BasePydanticModel
+from tech_market_researcher.core.config_loader import ConfigLoader
 
 CONFIG_DIR = Path("config") / "bootstrapping"
 
@@ -278,7 +278,9 @@ class BootstrapConfig(BasePydanticModel):
     debugging: DebuggingConfig = DebuggingConfig()
 
 
+CONFIG_LOADER = ConfigLoader(BootstrapConfig, CONFIG_DIR)
+
+
 def load_config(name: str) -> BootstrapConfig:
     """Load the bootstrap config at config/bootstrapping/<name>.yaml."""
-    data = yaml.safe_load((CONFIG_DIR / f"{name}.yaml").read_text())
-    return BootstrapConfig.model_validate(data)
+    return CONFIG_LOADER.load(name)

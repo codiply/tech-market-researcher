@@ -2,9 +2,8 @@
 
 from pathlib import Path
 
-import yaml
-
 from tech_market_researcher.core.common import BasePydanticModel
+from tech_market_researcher.core.config_loader import ConfigLoader
 
 CONFIG_DIR = Path("config") / "evaluations" / "mlflow"
 
@@ -58,7 +57,9 @@ class MlflowEvaluationConfig(BasePydanticModel):
     scorers: ScorersConfig
 
 
+CONFIG_LOADER = ConfigLoader(MlflowEvaluationConfig, CONFIG_DIR)
+
+
 def load_config(name: str) -> MlflowEvaluationConfig:
     """Load the evaluation config at config/evaluations/mlflow/<name>.yaml."""
-    data = yaml.safe_load((CONFIG_DIR / f"{name}.yaml").read_text())
-    return MlflowEvaluationConfig.model_validate(data)
+    return CONFIG_LOADER.load(name)

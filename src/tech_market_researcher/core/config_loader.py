@@ -51,17 +51,22 @@ class ConfigLoader(Generic[ConfigT]):
         self._base_path = base_path
         self._params = params
 
+    def _read_yaml(self, path: Path) -> dict[str, Any]:
+        """Read a YAML config file. An empty file (e.g. fully commented out) is treated as an empty config."""
+        data = yaml.safe_load(path.read_text())
+        if data is None:
+            return {}
+        if not isinstance(data, dict):
+            raise ValueError(f"Expected a mapping at the top level of {path}, got {type(data).__name__}.")
+        return data
+
     def _load_with_mixins(self, path: Path) -> dict[str, Any]:
         """Load the config at path, deep-merged with its declared mixins in declaration order."""
-        config = yaml.safe_load(path.read_text())
+        config = self._read_yaml(path)
         mixins: list[dict[str, Any]] = []
         for mixin_name in config.pop(self._params.mixins_field, []):
-            mixin = yaml.safe_load(
-                (
-                    self._base_path
-                    / self._params.mixins_folder_name
-                    / f"{mixin_name}.{self._params.config_file_extension}"
-                ).read_text()
+            mixin = self._read_yaml(
+                self._base_path / self._params.mixins_folder_name / f"{mixin_name}.{self._params.config_file_extension}"
             )
             mixin.pop(self._params.mixins_field, None)
             mixins.append(mixin)

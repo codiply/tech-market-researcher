@@ -1,15 +1,12 @@
 model_providers:
   mlflow_gateway:
     base_url: http://localhost:5000/gateway/mlflow/v1
-
 supervisor:
   system_prompt: |-
     You are a Researcher giving me insights into the Tech Market.
   model:
     provider: mlflow_gateway
     name: omlx.Qwen3.8-27B-oQ4e-mtp
-    # name: bedrock.eu.amazon.nova-2-lite-v1
-
   capabilities:
     runtime_context_debugger:
       enabled: true
@@ -23,7 +20,6 @@ supervisor:
       # provider: tavily
     todo_list:
       enabled: true
-
 observability:
   mlflow:
     enabled: true
