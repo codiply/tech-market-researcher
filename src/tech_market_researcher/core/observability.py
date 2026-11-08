@@ -6,6 +6,7 @@ from typing import Generator
 
 import mlflow
 from arize.otel import Transport, register
+from openinference.instrumentation import using_session
 from openinference.instrumentation.langchain import LangChainInstrumentor
 from opentelemetry import context as otel_context
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
@@ -53,10 +54,17 @@ class AgentAttributeSpanProcessor(SpanProcessor):
 
 @contextmanager
 def agent_trace_context(session_id: str, environment: str) -> Generator[None, None, None]:
-    """Tag every trace created in the scope with the session id and agent metadata."""
-    with mlflow.tracing.context(
-        session_id=session_id,
-        tags={"agent_version": PACKAGE_VERSION, "agent_environment": environment},
+    """Tag every trace created in the scope with the session id and agent metadata.
+
+    The session id is propagated through the OpenTelemetry context, so the
+    OpenInference tracer stamps it as ``session.id`` on the Arize spans.
+    """
+    with (
+        using_session(session_id),
+        mlflow.tracing.context(
+            session_id=session_id,
+            tags={"agent_version": PACKAGE_VERSION, "agent_environment": environment},
+        ),
     ):
         yield
 
