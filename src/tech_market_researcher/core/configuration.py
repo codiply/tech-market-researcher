@@ -7,7 +7,8 @@ from pathlib import Path
 from pydantic import Field, SecretStr, model_validator
 
 from tech_market_researcher.core.common import BasePydanticModel
-from tech_market_researcher.core.config_loader import ConfigLoader
+from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
+from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH
 
 CONFIG_DIR = Path("config") / "agent"
 
@@ -158,7 +159,11 @@ class ApplicationConfig(BasePydanticModel):
         return resolve_model_connection_details(self.model_providers, model)
 
 
-CONFIG_LOADER = ConfigLoader(ApplicationConfig, CONFIG_DIR)
+CONFIG_LOADER = ConfigLoader(
+    ApplicationConfig,
+    CONFIG_DIR,
+    ConfigLoaderParams(debug_dir_path=BASE_DEBUG_DIR_PATH / "config" / "agent"),
+)
 
 
 def load_config(name: str) -> ApplicationConfig:

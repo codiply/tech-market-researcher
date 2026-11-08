@@ -2,9 +2,12 @@
 
 import os
 from importlib.metadata import version
+from pathlib import Path
 
 PACKAGE_VERSION = version("tech-market-researcher")
 PROJECT_NAME = "tech-market-researcher"
+
+BASE_DEBUG_DIR_PATH = Path(".debug")
 
 DEFAULT_CONFIG_NAME = "dev"
 

@@ -8,7 +8,8 @@ from pathlib import Path
 from pydantic import Field, SecretStr, field_validator, model_validator
 
 from tech_market_researcher.core.common import BasePydanticModel
-from tech_market_researcher.core.config_loader import ConfigLoader
+from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
+from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH
 
 CONFIG_DIR = Path("config") / "bootstrapping"
 
@@ -278,7 +279,11 @@ class BootstrapConfig(BasePydanticModel):
     debugging: DebuggingConfig = DebuggingConfig()
 
 
-CONFIG_LOADER = ConfigLoader(BootstrapConfig, CONFIG_DIR)
+CONFIG_LOADER = ConfigLoader(
+    BootstrapConfig,
+    CONFIG_DIR,
+    ConfigLoaderParams(debug_dir_path=BASE_DEBUG_DIR_PATH / "config" / "bootstraping"),
+)
 
 
 def load_config(name: str) -> BootstrapConfig:

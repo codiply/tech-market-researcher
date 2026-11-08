@@ -1,0 +1,12 @@
+#!/bin/sh
+# Fail if any AGENT_TODO: markers remain in the codebase.
+# Markers are instructions for the agent (see the fix-agent-todos skill); commit
+# only after actioning them.
+rg -n "AGENT_TODO:" --no-ignore --hidden \
+    -g '!.venv' -g '!.git' -g '!.mypy_cache' -g '!.pytest_cache' \
+    -g '!.agents/skills/fix-agent-todos' -g '!scripts/git-hooks/check-agent-todos' -g '!.pre-commit-config.yaml'
+if [ $? -eq 0 ]; then
+    echo "AGENT_TODO: markers found. Action them (or remove them explicitly) before committing." >&2
+    exit 1
+fi
+exit 0

@@ -50,6 +50,13 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: check_agent_todos
+        name: check agent todos
+        description: "Fail if AGENT_TODO: markers remain in the codebase"
+        entry: scripts/git-hooks/check-agent-todos
+        language: system
+        pass_filenames: false
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.0
     hooks:

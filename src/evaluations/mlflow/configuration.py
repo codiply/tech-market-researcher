@@ -3,7 +3,8 @@
 from pathlib import Path
 
 from tech_market_researcher.core.common import BasePydanticModel
-from tech_market_researcher.core.config_loader import ConfigLoader
+from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
+from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH
 
 CONFIG_DIR = Path("config") / "evaluations" / "mlflow"
 
@@ -57,7 +58,11 @@ class MlflowEvaluationConfig(BasePydanticModel):
     scorers: ScorersConfig
 
 
-CONFIG_LOADER = ConfigLoader(MlflowEvaluationConfig, CONFIG_DIR)
+CONFIG_LOADER = ConfigLoader(
+    MlflowEvaluationConfig,
+    CONFIG_DIR,
+    ConfigLoaderParams(debug_dir_path=BASE_DEBUG_DIR_PATH / "config" / "evaluations" / "mlflow"),
+)
 
 
 def load_config(name: str) -> MlflowEvaluationConfig:
