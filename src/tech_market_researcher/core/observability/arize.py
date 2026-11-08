@@ -1,24 +1,15 @@
-"""MLflow and Arize observability setup for the agent."""
+"""Arize trace export over OTLP gRPC."""
 
 import os
-from contextlib import contextmanager
-from typing import Generator
 
-import mlflow
 from arize.otel import Transport, register
-from openinference.instrumentation import using_session
 from openinference.instrumentation.langchain import LangChainInstrumentor
 from opentelemetry import context as otel_context
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 
-from tech_market_researcher.core.configuration import (
-    ArizeObservabilityConfig,
-    MlflowObservabilityConfig,
-    ObservabilityConfig,
-)
-from tech_market_researcher.core.constants import PACKAGE_VERSION, PROJECT_NAME
+from tech_market_researcher.core.configuration import ArizeObservabilityConfig
+from tech_market_researcher.core.constants import PACKAGE_VERSION
 
-MLFLOW_TRACKING_URI_ENV = "MLFLOW_SERVER_URI"
 ARIZE_COLLECTOR_ENDPOINT_ENV = "ARIZE_COLLECTOR_ENDPOINT"
 
 # arize-otel's register() requires space_id and api_key even for a local
@@ -52,42 +43,7 @@ class AgentAttributeSpanProcessor(SpanProcessor):
         return True
 
 
-@contextmanager
-def agent_trace_context(session_id: str, environment: str) -> Generator[None, None, None]:
-    """Tag every trace created in the scope with the session id and agent metadata.
-
-    The session id is propagated through the OpenTelemetry context, so the
-    OpenInference tracer stamps it as ``session.id`` on the Arize spans.
-    """
-    with (
-        using_session(session_id),
-        mlflow.tracing.context(
-            session_id=session_id,
-            tags={"agent_version": PACKAGE_VERSION, "agent_environment": environment},
-        ),
-    ):
-        yield
-
-
-def setup_observability(config: ObservabilityConfig, environment: str) -> None:
-    """Configure MLflow tracking and Arize trace export, whichever is enabled."""
-    if config.mlflow.enabled:
-        _setup_mlflow(config.mlflow)
-    if config.arize.enabled:
-        _setup_arize(config.arize, environment)
-
-
-def _setup_mlflow(config: MlflowObservabilityConfig) -> None:
-    """Configure MLflow tracking and auto-tracing."""
-    tracking_uri = os.environ[MLFLOW_TRACKING_URI_ENV].rstrip("/")
-    mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(config.experiment_name)
-    mlflow.set_active_model(name=PROJECT_NAME)
-    # Enable auto-tracing for LangChain (and LangGraph-based frameworks like Deep Agent)
-    mlflow.langchain.autolog()
-
-
-def _setup_arize(config: ArizeObservabilityConfig, environment: str) -> None:
+def setup_arize(config: ArizeObservabilityConfig, environment: str) -> None:
     """Export LangChain spans to the local Arize server over OTLP gRPC.
 
     The collector endpoint (Arize's gRPC port, default :4317) comes from

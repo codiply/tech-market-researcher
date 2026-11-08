@@ -1,6 +1,6 @@
 ---
 name: fix-agent-todos
-description: Find and action AGENT_TODO: markers in the codebase, treating each marker as an instruction to follow. Use only when the user explicitly asks to fix or action AGENT_TODO markers.
+description: "Find and action AGENT_TODO: markers in the codebase, treating each marker as an instruction to follow. Use only when the user explicitly asks to fix or action AGENT_TODO markers."
 ---
 
 # Fix Agent TODOs
