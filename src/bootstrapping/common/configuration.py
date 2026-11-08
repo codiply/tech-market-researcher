@@ -6,7 +6,9 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
+
+from tech_market_researcher.core.common import BasePydanticModel
 
 CONFIG_DIR = Path("config") / "bootstrapping"
 
@@ -18,10 +20,8 @@ class LlmProvider(str, Enum):
     BEDROCK = "bedrock"  # shown as "Amazon Bedrock" in the MLflow UI
 
 
-class EndpointConfig(BaseModel):
+class EndpointConfig(BasePydanticModel):
     """One gateway endpoint, each serving a single model."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str
     model_name: str
@@ -38,10 +38,8 @@ class EndpointConfig(BaseModel):
         return name
 
 
-class LlmConnectionConfig(BaseModel):
+class LlmConnectionConfig(BasePydanticModel):
     """One LLM connection exposed through the MLflow gateway."""
-
-    model_config = ConfigDict(extra="forbid")
 
     api_key_name: str
     provider: LlmProvider
@@ -105,34 +103,28 @@ class BudgetPolicyAction(str, Enum):
         raise NotImplementedError(f"No gateway action mapping for {self!r}.")
 
 
-class BudgetPolicyConfig(BaseModel):
+class BudgetPolicyConfig(BasePydanticModel):
     """One global AI gateway budget policy."""
-
-    model_config = ConfigDict(extra="forbid")
 
     amount_usd: float = Field(gt=0)
     reset_period: BudgetPolicyResetPeriod
     action: BudgetPolicyAction
 
 
-class DatasetFiltersConfig(BaseModel):
+class DatasetFiltersConfig(BasePydanticModel):
     """Record predicates for cherry-picking a subset of a dataset's folders.
 
     Each field is optional: None matches both cases, True selects only records
     with the attribute, False only records without it.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     has_expected_response: bool | None = None
     has_expected_facts: bool | None = None
     has_guidelines: bool | None = None
 
 
-class DatasetSourceConfig(BaseModel):
+class DatasetSourceConfig(BasePydanticModel):
     """A dataset sourced from YAML files in local folders under assets/datasets/."""
-
-    model_config = ConfigDict(extra="forbid")
 
     dataset_name: str
     local_directories: list[str] = []
@@ -169,10 +161,8 @@ class ArizeApiType(str, Enum):
         return self.value.upper()
 
 
-class ArizeOpenAISettings(BaseModel):
+class ArizeOpenAISettings(BasePydanticModel):
     """OpenAI-SDK settings for one Arize custom provider."""
-
-    model_config = ConfigDict(extra="forbid")
 
     api_type: ArizeApiType
     api_key_env_var_name: str | None = None
@@ -193,10 +183,8 @@ class ArizeOpenAISettings(BaseModel):
         return None
 
 
-class ArizeAIProviderConfig(BaseModel):
+class ArizeAIProviderConfig(BasePydanticModel):
     """One custom LLM provider provisioned in Arize (Phoenix)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     provider_name: str
     description: str | None = None
@@ -205,14 +193,12 @@ class ArizeAIProviderConfig(BaseModel):
     sdk_specific_settings: ArizeOpenAISettings
 
 
-class ArizeModelCosts(BaseModel):
+class ArizeModelCosts(BasePydanticModel):
     """Token prices for one Arize model, in USD per million tokens.
 
     Phoenix requires input and output prices; when omitted they are reported as
     zero. Omitted optional kinds are not reported to Phoenix at all.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     input: float = 0.0
     output: float = 0.0
@@ -221,10 +207,8 @@ class ArizeModelCosts(BaseModel):
     reasoning: float | None = None
 
 
-class ArizeModelConfig(BaseModel):
+class ArizeModelConfig(BasePydanticModel):
     """One generative model provisioned in Arize for cost tracking."""
-
-    model_config = ConfigDict(extra="forbid")
 
     model_name: str
     name_pattern: str
@@ -239,20 +223,16 @@ class ArizeModelConfig(BaseModel):
         return pattern
 
 
-class ArizeConfig(BaseModel):
+class ArizeConfig(BasePydanticModel):
     """Arize (Phoenix) settings."""
-
-    model_config = ConfigDict(extra="forbid")
 
     datasets: list[ArizeDatasetConfig] = []
     ai_providers: list[ArizeAIProviderConfig] = []
     models: list[ArizeModelConfig] = []
 
 
-class MlflowConfig(BaseModel):
+class MlflowConfig(BasePydanticModel):
     """MLflow AI Gateway settings."""
-
-    model_config = ConfigDict(extra="forbid")
 
     llm_connections: list[LlmConnectionConfig]
     endpoints: list[EndpointConfig] = []
@@ -276,27 +256,21 @@ class MlflowConfig(BaseModel):
         return {connection.api_key_name: connection for connection in self.llm_connections}
 
 
-class S3Config(BaseModel):
+class S3Config(BasePydanticModel):
     """S3 (MinIO) artifact storage settings."""
-
-    model_config = ConfigDict(extra="forbid")
 
     buckets_to_create: list[str]
 
 
-class DebuggingConfig(BaseModel):
+class DebuggingConfig(BasePydanticModel):
     """Debugging aids; disabled by default."""
-
-    model_config = ConfigDict(extra="forbid")
 
     # Dump rendered Jinja dataset templates into .debug/datasets/<dir>/<file>.yaml.
     dump_rendered_datasets: bool = False
 
 
-class BootstrapConfig(BaseModel):
+class BootstrapConfig(BasePydanticModel):
     """Application settings."""
-
-    model_config = ConfigDict(extra="forbid")
 
     mlflow: MlflowConfig
     s3: S3Config

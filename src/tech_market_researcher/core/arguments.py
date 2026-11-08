@@ -4,8 +4,7 @@ from abc import ABC, abstractmethod
 from argparse import ArgumentParser
 from typing import Self
 
-from pydantic import BaseModel
-
+from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.constants import (
     DEFAULT_CONFIG_NAME,
     DEFAULT_CONVERSATION_ID,
@@ -14,7 +13,7 @@ from tech_market_researcher.core.constants import (
 )
 
 
-class BaseCommandLineArguments(ABC, BaseModel):
+class BaseCommandLineArguments(ABC, BasePydanticModel):
     """Base model for command-line arguments; subclasses declare fields and register the arguments."""
 
     @classmethod

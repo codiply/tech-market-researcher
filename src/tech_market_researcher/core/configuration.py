@@ -4,17 +4,16 @@ import os
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 
+from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader
 
 CONFIG_DIR = Path("config") / "agent"
 
 
-class ModelProviderConfig(BaseModel):
+class ModelProviderConfig(BasePydanticModel):
     """Connection settings for a model provider."""
-
-    model_config = ConfigDict(extra="forbid")
 
     base_url: str
     api_key_env_var_name: str | None = None
@@ -27,19 +26,15 @@ class ModelProviderConfig(BaseModel):
         return SecretStr("dummy")
 
 
-class ModelConfig(BaseModel):
+class ModelConfig(BasePydanticModel):
     """Model settings."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str
     provider: str
 
 
-class ModelConnectionDetails(BaseModel):
+class ModelConnectionDetails(BasePydanticModel):
     """Resolved connection details for one model."""
-
-    model_config = ConfigDict(extra="forbid")
 
     model_name: str
     base_url: str
@@ -53,51 +48,39 @@ class SearchProvider(str, Enum):
     SEARXNG = "searxng"
 
 
-class SearchToolConfig(BaseModel):
+class SearchToolConfig(BasePydanticModel):
     """Search tool settings. Omit the section (or set enabled: false) to disable."""
-
-    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     provider: SearchProvider = SearchProvider.SEARXNG
 
 
-class FetchPageConfig(BaseModel):
+class FetchPageConfig(BasePydanticModel):
     """Fetch-page tool settings. Omit the section (or set enabled: false) to disable."""
 
-    model_config = ConfigDict(extra="forbid")
-
     enabled: bool = False
 
 
-class TodoListConfig(BaseModel):
+class TodoListConfig(BasePydanticModel):
     """Todo-list middleware settings."""
 
-    model_config = ConfigDict(extra="forbid")
-
     enabled: bool = False
 
 
-class RuntimeContextDebuggerConfig(BaseModel):
+class RuntimeContextDebuggerConfig(BasePydanticModel):
     """Runtime-context debugger tool settings. Omit the section (or set enabled: false) to disable."""
 
-    model_config = ConfigDict(extra="forbid")
-
     enabled: bool = False
 
 
-class CurrentDateTimeConfig(BaseModel):
+class CurrentDateTimeConfig(BasePydanticModel):
     """Current-datetime tool settings. Omit the section (or set enabled: false) to disable."""
 
-    model_config = ConfigDict(extra="forbid")
-
     enabled: bool = False
 
 
-class CapabilitiesConfig(BaseModel):
+class CapabilitiesConfig(BasePydanticModel):
     """Settings for the tools and middlewares available to the agent."""
-
-    model_config = ConfigDict(extra="forbid")
 
     runtime_context_debugger: RuntimeContextDebuggerConfig = Field(default_factory=RuntimeContextDebuggerConfig)
     current_datetime: CurrentDateTimeConfig = Field(default_factory=CurrentDateTimeConfig)
@@ -106,20 +89,16 @@ class CapabilitiesConfig(BaseModel):
     todo_list: TodoListConfig = Field(default_factory=TodoListConfig)
 
 
-class SupervisorConfig(BaseModel):
+class SupervisorConfig(BasePydanticModel):
     """Supervisor agent settings."""
-
-    model_config = ConfigDict(extra="forbid")
 
     model: ModelConfig
     system_prompt: str
     capabilities: CapabilitiesConfig
 
 
-class MlflowObservabilityConfig(BaseModel):
+class MlflowObservabilityConfig(BasePydanticModel):
     """MLflow observability settings. Omit the section (or set enabled: false) to disable."""
-
-    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     experiment_name_template: str = ""
@@ -131,10 +110,8 @@ class MlflowObservabilityConfig(BaseModel):
         return self
 
 
-class ArizeObservabilityConfig(BaseModel):
+class ArizeObservabilityConfig(BasePydanticModel):
     """Arize observability settings. Omit the section (or set enabled: false) to disable."""
-
-    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     project_name: str = ""
@@ -146,10 +123,8 @@ class ArizeObservabilityConfig(BaseModel):
         return self
 
 
-class ObservabilityConfig(BaseModel):
+class ObservabilityConfig(BasePydanticModel):
     """Observability settings. Omit the section to disable both MLflow and Arize."""
-
-    model_config = ConfigDict(extra="forbid")
 
     mlflow: MlflowObservabilityConfig = Field(default_factory=MlflowObservabilityConfig)
     arize: ArizeObservabilityConfig = Field(default_factory=ArizeObservabilityConfig)
@@ -170,10 +145,8 @@ def resolve_model_connection_details(
     )
 
 
-class ApplicationConfig(BaseModel):
+class ApplicationConfig(BasePydanticModel):
     """Application settings."""
-
-    model_config = ConfigDict(extra="forbid")
 
     environment: str
     model_providers: dict[str, ModelProviderConfig]

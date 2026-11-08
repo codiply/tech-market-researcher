@@ -3,25 +3,22 @@
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+
+from tech_market_researcher.core.common import BasePydanticModel
 
 CONFIG_DIR = Path("config") / "evaluations" / "mlflow"
 
 
-class BaseScorerConfig(BaseModel):
+class BaseScorerConfig(BasePydanticModel):
     """Settings for a single scorer."""
-
-    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     # Override the judge model for this scorer; defaults to the global judge model.
     model_name_override: str | None = None
 
 
-class GuidelinesInstanceConfig(BaseModel):
+class GuidelinesInstanceConfig(BasePydanticModel):
     """A single instance of the `guidelines` scorer."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str
     guidelines: list[str]
@@ -33,10 +30,8 @@ class GuidelinesScorerConfig(BaseScorerConfig):
     instances: list[GuidelinesInstanceConfig] = []
 
 
-class ScorersConfig(BaseModel):
+class ScorersConfig(BasePydanticModel):
     """Which scorers to run, keyed by scorer name."""
-
-    model_config = ConfigDict(extra="forbid")
 
     completeness: BaseScorerConfig
     correctness: BaseScorerConfig
@@ -54,10 +49,8 @@ class ScorersConfig(BaseModel):
     tool_call_efficiency: BaseScorerConfig
 
 
-class MlflowEvaluationConfig(BaseModel):
+class MlflowEvaluationConfig(BasePydanticModel):
     """Evaluation settings. The judge runs against an endpoint of the MLflow AI Gateway."""
-
-    model_config = ConfigDict(extra="forbid")
 
     experiment_name: str
     dataset_name: str
