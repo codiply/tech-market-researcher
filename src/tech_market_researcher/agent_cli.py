@@ -24,7 +24,7 @@ def main() -> None:
     args = get_args(CliCommandLineArguments)
 
     agent = create_agent(args)
-    context = AgentRuntimeContext(user_id=args.user_id, conversation_id=args.conversation_id, time_zone=args.time_zone)
+    context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
 
     console.print("Chat with the agent. Type 'exit' to quit.")
     messages: list = []
@@ -36,7 +36,7 @@ def main() -> None:
             continue
 
         messages.append({"role": "user", "content": user_input})
-        result = agent.invoke({"messages": messages}, context=context)
+        result = agent.invoke(messages, context=context)
         # Keep the full conversation (incl. the agent's reply) for the next turn
         messages = result["messages"]
         console.print("[bold cyan]agent>[/bold cyan]", result["messages"][-1].content)

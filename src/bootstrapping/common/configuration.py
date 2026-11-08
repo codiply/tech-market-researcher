@@ -134,7 +134,7 @@ class DatasetSourceConfig(BasePydanticModel):
 class MlflowDatasetConfig(DatasetSourceConfig):
     """One evaluation dataset provisioned under an MLflow experiment."""
 
-    experiment: str
+    experiment_name: str
 
 
 class ArizeDatasetConfig(DatasetSourceConfig):

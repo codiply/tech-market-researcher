@@ -31,25 +31,25 @@ mlflow:
       reset_period: weekly
       action: reject
   datasets:
-    - experiment: tech-market-researcher-evals
+    - experiment_name: tech-market-researcher
       dataset_name: with_expected_response
       local_directories:
         - human_generated
       filters:
         has_expected_response: true
-    - experiment: tech-market-researcher-evals
+    - experiment_name: tech-market-researcher
       dataset_name: with_guideline
       local_directories:
         - human_generated
       filters:
         has_guidelines: true
-    - experiment: tech-market-researcher-evals
+    - experiment_name: tech-market-researcher
       dataset_name: with_expected_facts
       local_directories:
         - human_generated
       filters:
         has_expected_facts: true
-    - experiment: tech-market-researcher-evals
+    - experiment_name: tech-market-researcher
       dataset_name: mixed
       local_directories:
         - human_generated

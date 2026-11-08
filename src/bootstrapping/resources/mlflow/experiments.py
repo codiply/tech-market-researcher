@@ -59,7 +59,9 @@ def _ensure_dataset(
     dataset = _find_dataset(client, experiment_id, dataset_config.dataset_name)
     if dataset is None:
         dataset = client.create_dataset(dataset_config.dataset_name, experiment_id)
-        logger.info("Created dataset '%s' in experiment '%s'.", dataset_config.dataset_name, dataset_config.experiment)
+        logger.info(
+            "Created dataset '%s' in experiment '%s'.", dataset_config.dataset_name, dataset_config.experiment_name
+        )
     else:
         logger.info("Dataset '%s' already exists - reusing.", dataset_config.dataset_name)
     local = {record.input_hash(): _expected_expectations(record) for record in records}
@@ -85,7 +87,7 @@ def bootstrap_mlflow_experiments(config: BootstrapConfig) -> None:
     client = mlflow.MlflowClient()
     try:
         for dataset_config in config.mlflow.datasets:
-            experiment_id = _ensure_experiment(client, dataset_config.experiment)
+            experiment_id = _ensure_experiment(client, dataset_config.experiment_name)
             _ensure_dataset(client, experiment_id, dataset_config, config.debugging.dump_rendered_datasets)
     except MlflowException as e:
         raise BootstrapError(str(e)) from e

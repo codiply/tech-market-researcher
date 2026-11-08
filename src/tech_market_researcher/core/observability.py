@@ -1,6 +1,8 @@
 """MLflow and Arize observability setup for the agent."""
 
 import os
+from contextlib import contextmanager
+from typing import Generator
 
 import mlflow
 from arize.otel import Transport, register
@@ -11,7 +13,7 @@ from tech_market_researcher.core.configuration import (
     MlflowObservabilityConfig,
     ObservabilityConfig,
 )
-from tech_market_researcher.core.constants import PACKAGE_VERSION
+from tech_market_researcher.core.constants import PACKAGE_VERSION, PROJECT_NAME
 
 MLFLOW_TRACKING_URI_ENV = "MLFLOW_SERVER_URI"
 ARIZE_COLLECTOR_ENDPOINT_ENV = "ARIZE_COLLECTOR_ENDPOINT"
@@ -21,6 +23,16 @@ ARIZE_COLLECTOR_ENDPOINT_ENV = "ARIZE_COLLECTOR_ENDPOINT"
 # local placeholders.
 ARIZE_SPACE_ID = "local"
 ARIZE_API_KEY = "local"
+
+
+@contextmanager
+def agent_trace_context(session_id: str, environment: str) -> Generator[None, None, None]:
+    """Tag every trace created in the scope with the session id and agent metadata."""
+    with mlflow.tracing.context(
+        session_id=session_id,
+        tags={"agent_version": PACKAGE_VERSION, "agent_environment": environment},
+    ):
+        yield
 
 
 def setup_observability(config: ObservabilityConfig) -> None:
@@ -35,9 +47,8 @@ def _setup_mlflow(config: MlflowObservabilityConfig) -> None:
     """Configure MLflow tracking and auto-tracing."""
     tracking_uri = os.environ[MLFLOW_TRACKING_URI_ENV].rstrip("/")
     mlflow.set_tracking_uri(tracking_uri)
-    version = PACKAGE_VERSION
-    mlflow.set_experiment(config.experiment_name_template.format(project_version=version))
-    mlflow.set_active_model(name=f"tech-market-researcher-v{version}".replace(".", "_"))
+    mlflow.set_experiment(config.experiment_name)
+    mlflow.set_active_model(name=PROJECT_NAME)
     # Enable auto-tracing for LangChain (and LangGraph-based frameworks like Deep Agent)
     mlflow.langchain.autolog()
 

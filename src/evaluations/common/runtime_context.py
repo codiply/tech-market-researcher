@@ -1,13 +1,13 @@
 """Runtime context construction shared by the evaluation platforms."""
 
 from tech_market_researcher.core.common import AgentRuntimeContext
-from tech_market_researcher.core.constants import DEFAULT_CONVERSATION_ID, DEFAULT_TIME_ZONE, DEFAULT_USER_ID
+from tech_market_researcher.core.constants import DEFAULT_SESSION_ID, DEFAULT_TIME_ZONE, DEFAULT_USER_ID
 
 # Defaults for every required AgentRuntimeContext field; the record's context
 # overrides them. New fields with their own pydantic defaults are filled in by the model.
 DEFAULT_RUNTIME_CONTEXT = {
     "user_id": DEFAULT_USER_ID,
-    "conversation_id": DEFAULT_CONVERSATION_ID,
+    "session_id": DEFAULT_SESSION_ID,
     "time_zone": DEFAULT_TIME_ZONE,
 }
 

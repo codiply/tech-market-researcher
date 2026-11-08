@@ -101,12 +101,12 @@ class MlflowObservabilityConfig(BasePydanticModel):
     """MLflow observability settings. Omit the section (or set enabled: false) to disable."""
 
     enabled: bool = False
-    experiment_name_template: str = ""
+    experiment_name: str = ""
 
     @model_validator(mode="after")
-    def _check_experiment_name_template(self) -> "MlflowObservabilityConfig":
-        if self.enabled and not self.experiment_name_template:
-            raise ValueError("experiment_name_template is required when enabled is true.")
+    def _check_experiment_name(self) -> "MlflowObservabilityConfig":
+        if self.enabled and not self.experiment_name:
+            raise ValueError("experiment_name is required when enabled is true.")
         return self
 
 

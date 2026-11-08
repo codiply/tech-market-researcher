@@ -12,7 +12,7 @@ See [design.md](design.md) for the design and architecture diagrams.
 ./stack.sh up -d
 ```
 
-This also runs the bootstrap, which provisions the stack's resources (S3, MLflow, Arize) from `config/`. It is idempotent; re-run it any time with `./stack.sh bootstrap` (e.g. after updating the bootstrap config).
+This also runs the bootstrap, which provisions the stack's resources (S3, MLflow, Arize) from `config/`. It is idempotent; re-run it any time with `./stack.sh bootstrap` (e.g. after updating the bootstrap config). Note that gateway endpoints and their API keys are written into the AI Gateway during the bootstrap, so if you change an endpoint URL or a secret in `.env` you must re-run the bootstrap for the gateway to pick it up.
 
 The stack exposes:
 
@@ -33,7 +33,7 @@ The stack exposes:
 uv run agent_cli
 ```
 
-Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--user-id`, `--conversation-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
+Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
 
 ## Run the evaluations
 
