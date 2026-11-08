@@ -7,6 +7,8 @@ from typing import Generator
 import mlflow
 from arize.otel import Transport, register
 from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry import context as otel_context
+from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 
 from tech_market_researcher.core.configuration import (
     ArizeObservabilityConfig,
@@ -25,6 +27,30 @@ ARIZE_SPACE_ID = "local"
 ARIZE_API_KEY = "local"
 
 
+class AgentAttributeSpanProcessor(SpanProcessor):
+    """Stamp process-level agent attributes onto every span before export."""
+
+    def __init__(self, attributes: dict[str, str]) -> None:
+        self._attributes = attributes
+
+    def on_start(
+        self,
+        span: Span,
+        parent_context: otel_context.Context | None = None,
+    ) -> None:
+        for key, value in self._attributes.items():
+            span.set_attribute(key, value)
+
+    def on_end(self, span: ReadableSpan) -> None:
+        pass
+
+    def shutdown(self) -> None:
+        pass
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return True
+
+
 @contextmanager
 def agent_trace_context(session_id: str, environment: str) -> Generator[None, None, None]:
     """Tag every trace created in the scope with the session id and agent metadata."""
@@ -35,12 +61,12 @@ def agent_trace_context(session_id: str, environment: str) -> Generator[None, No
         yield
 
 
-def setup_observability(config: ObservabilityConfig) -> None:
+def setup_observability(config: ObservabilityConfig, environment: str) -> None:
     """Configure MLflow tracking and Arize trace export, whichever is enabled."""
     if config.mlflow.enabled:
         _setup_mlflow(config.mlflow)
     if config.arize.enabled:
-        _setup_arize(config.arize)
+        _setup_arize(config.arize, environment)
 
 
 def _setup_mlflow(config: MlflowObservabilityConfig) -> None:
@@ -53,7 +79,7 @@ def _setup_mlflow(config: MlflowObservabilityConfig) -> None:
     mlflow.langchain.autolog()
 
 
-def _setup_arize(config: ArizeObservabilityConfig) -> None:
+def _setup_arize(config: ArizeObservabilityConfig, environment: str) -> None:
     """Export LangChain spans to the local Arize server over OTLP gRPC.
 
     The collector endpoint (Arize's gRPC port, default :4317) comes from
@@ -67,5 +93,13 @@ def _setup_arize(config: ArizeObservabilityConfig) -> None:
         endpoint=os.environ[ARIZE_COLLECTOR_ENDPOINT_ENV],
         transport=Transport.GRPC,
         verbose=False,
+        span_processors=[
+            AgentAttributeSpanProcessor(
+                {
+                    "agent_version": PACKAGE_VERSION,
+                    "agent_environment": environment,
+                }
+            )
+        ],
     )
     LangChainInstrumentor().instrument(tracer_provider=tracer_provider)

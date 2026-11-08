@@ -39,7 +39,7 @@ def create_agent(
     config = load_config(args.config_name)
     if config_mutations_hook is not None:
         config_mutations_hook(config)
-    setup_observability(config.observability)
+    setup_observability(config.observability, config.environment)
     model_connection = config.get_model_connection_details(config.supervisor.model)
     model = ChatOpenAI(
         model=model_connection.model_name,
