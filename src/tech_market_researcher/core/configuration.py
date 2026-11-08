@@ -8,7 +8,7 @@ from pydantic import Field, SecretStr, model_validator
 
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
-from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH
+from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH, DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR
 
 CONFIG_DIR = Path("config") / "agent"
 
@@ -159,13 +159,28 @@ class ApplicationConfig(BasePydanticModel):
         return resolve_model_connection_details(self.model_providers, model)
 
 
-CONFIG_LOADER = ConfigLoader(
-    ApplicationConfig,
-    CONFIG_DIR,
-    ConfigLoaderParams(debug_dir_path=BASE_DEBUG_DIR_PATH / "config" / "agent"),
-)
+# pylint: disable=duplicate-code  # Same lazy-loader pattern as the other configuration.py files.
+_CONFIG_LOADER: ConfigLoader | None = None
+
+
+def get_config_loader() -> ConfigLoader:
+    """Lazily construct the config loader on first use."""
+    global _CONFIG_LOADER  # pylint: disable=global-statement
+    if _CONFIG_LOADER is None:
+        debug_dir_path: Path | None = None
+        if os.environ.get(DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR, "").lower() in {"true", "1"}:
+            debug_dir_path = BASE_DEBUG_DIR_PATH / "config" / "agent"
+        _CONFIG_LOADER = ConfigLoader(
+            ApplicationConfig,
+            CONFIG_DIR,
+            ConfigLoaderParams(debug_dir_path=debug_dir_path),
+        )
+    return _CONFIG_LOADER
+
+
+# pylint: enable=duplicate-code
 
 
 def load_config(name: str) -> ApplicationConfig:
     """Load the agent config at config/agent/<name>.yaml."""
-    return CONFIG_LOADER.load(name)
+    return get_config_loader().load(name)

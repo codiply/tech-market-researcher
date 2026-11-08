@@ -1,6 +1,6 @@
 """Unit tests for the agent configuration loading."""
 
-from tech_market_researcher.core.configuration import CONFIG_LOADER
+from tech_market_researcher.core.configuration import get_config_loader
 
 
 def test_validate_all_agent_configs() -> None:
@@ -11,4 +11,4 @@ def test_validate_all_agent_configs() -> None:
     when someone boots the stack with that config. This test loads all committed configs
     in CI/pre-commit so such breakage is caught at commit time, not at runtime.
     """
-    CONFIG_LOADER.validate_all_configs()
+    get_config_loader().validate_all_configs()

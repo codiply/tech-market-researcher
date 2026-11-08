@@ -1,6 +1,5 @@
 """Generic config loading."""
 
-import os
 import shutil
 from pathlib import Path
 from typing import Any, Generic, TypeVar
@@ -9,9 +8,6 @@ import yaml
 from pydantic import BaseModel, field_validator
 
 ConfigT = TypeVar("ConfigT", bound=BaseModel)
-
-# True when the DEBUG_DUMP_RENDERED_CONFIGS env var is set to True, true, or 1.
-DUMP_RENDERED_CONFIGS = os.environ.get("DEBUG_DUMP_RENDERED_CONFIGS", "").lower() in {"true", "1"}
 
 # Debug dump folder names.
 WITH_MIXINS_FOLDER = "with_mixins"
@@ -26,6 +22,7 @@ class ConfigLoaderParams(BaseModel):
     local_override_filename_infix: str = "local"
     mixins_field: str = "_mixins"
     config_file_extension: str = "yaml"
+    # When set, rendered configs are dumped under this path; None disables the dump.
     debug_dir_path: Path | None = None
 
     @field_validator("config_file_extension")
@@ -87,10 +84,10 @@ class ConfigLoader(Generic[ConfigT]):
     def _prepare_debug_directory_if_needed(self, config_name: str) -> Path | None:
         """Return the effective debug dir (debug_dir_path/config_name), deleting any existing files there.
 
-        Returns None when dumping is disabled.
+        Returns None when no debug dir was configured.
         """
         base = self._params.debug_dir_path
-        if base is None or not DUMP_RENDERED_CONFIGS:
+        if base is None:
             return None
         debug_dir = base / config_name
         if debug_dir.exists():
@@ -100,8 +97,8 @@ class ConfigLoader(Generic[ConfigT]):
     def _debug_dump_rendered_file_if_needed(
         self, debug_dir: Path | None, relative_path: str, config: dict[str, Any]
     ) -> None:
-        """Write a rendered config under the debug dir, creating folders as needed, when dumping is enabled."""
-        if debug_dir is None or not DUMP_RENDERED_CONFIGS:
+        """Write a rendered config under the debug dir, creating folders as needed, when set."""
+        if debug_dir is None:
             return
         path = debug_dir / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)

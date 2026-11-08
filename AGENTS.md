@@ -28,7 +28,7 @@ Do not stage, unstage, or commit files, unless explicitly instructed. The user m
 
 ## Pre-commit hooks
 
-Check them by delegating a `pre-commit run --all-files` run to a sub-agent, so the output does not clutter the main conversation.
+Do not run pre-commit checks proactively or after every change. Run them before the user commits, for example when they ask for a commit message or otherwise signal they are about to commit. When running them, delegate a `pre-commit run --all-files` run to a sub-agent, so the output does not clutter the main conversation.
 
 ## Docstrings
 
