@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 from typing import Generator
 
-import mlflow
+import mlflow as _mlflow
 from openinference.instrumentation import using_session
 
 from tech_market_researcher.core.configuration import ObservabilityConfig
@@ -23,7 +23,7 @@ def agent_trace_context(session_id: str, environment: str) -> Generator[None, No
     """
     with (
         using_session(session_id),
-        mlflow.tracing.context(
+        _mlflow.tracing.context(
             session_id=session_id,
             tags={"agent_version": PACKAGE_VERSION, "agent_environment": environment},
         ),

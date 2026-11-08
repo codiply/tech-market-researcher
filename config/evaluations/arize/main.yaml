@@ -1,0 +1,11 @@
+dataset_name: mixed
+judge_model_name: omlx.Qwen3.8-27B-oQ4e-mtp
+evaluators:
+  correctness:
+    enabled: true
+  hallucination:
+    enabled: true
+  refusal:
+    enabled: false
+  conciseness:
+    enabled: false

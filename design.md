@@ -10,6 +10,7 @@ flowchart LR
 
     subgraph evals["Evaluations"]
         mlflow_evals["MLflow evaluations"]
+        arize_evals["Arize evaluations"]
     end
 
     subgraph docker["Docker (docker compose)"]
@@ -24,7 +25,10 @@ flowchart LR
         valkey["searxng_valkey<br/>Valkey (rate limiting)"]
         minio["minio<br/>S3 storage (MLflow artifacts)"]
         pgadmin["pgadmin<br/>Postgres web UI"]
-        arize["arize<br/>Arize (LLM observability)"]
+        subgraph arize_box["arize — Arize"]
+            arize["Observability<br/>& traces"]
+            arize_datasets["Datasets<br/>& experiments"]
+        end
         arize_db["arize_db<br/>Postgres 17"]
     end
 
@@ -38,15 +42,20 @@ flowchart LR
     main -->|trace logging| traces
     main -->|trace logging| arize
     main -->|search tool| searxng
-    main -.->|search tool - alternative| tavily
+    main -->|search tool - alternative| tavily
     main -->|fetch_page tool| web
     mlflow_evals -->|runs the agent| main
     mlflow_evals -->|judge requests| gateway
     mlflow_evals -->|reads datasets| datasets
     mlflow_evals -->|evaluation runs| eval_runs
+    arize_evals -->|runs the agent| main
+    arize_evals -->|judge requests| gateway
+    arize_evals -->|reads datasets| arize_datasets
+    arize_evals -->|experiments| arize_datasets
+    arize -->|stores datasets & experiments| arize_datasets
     arize -->|providers call LLMs via gateway| gateway
     gateway -->|local model| macbook
-    gateway -.->|cloud model| aws
+    gateway -->|cloud model| aws
     searxng -->|queries| engines
     searxng --> valkey
     mlflow_box -->|backend store| mlflow_db
@@ -57,7 +66,7 @@ flowchart LR
 ```
 
 - **Agent** — an agent built on [LangChain](https://www.langchain.com) [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent). LLM requests go through the [MLflow](https://mlflow.org) AI Gateway; every run is traced back to MLflow.
-- **Evaluations** — the evaluation code runs the agent over the evaluation dataset stored in MLflow and scores each record with an LLM judge that also goes through the AI Gateway; results are stored back as MLflow evaluation runs.
+- **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Arize** (datasets and results are stored as a Phoenix experiment in Arize).
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces. It also monitors token usage and cost in real time, and supports budgets that cap spending, so a runaway agent run can't keep consuming tokens and money indefinitely.
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
 - **Supporting containers** — [Postgres](https://www.postgresql.org) (MLflow's backend store), [Arize](https://arize.com) (LLM/agent observability) with its own Postgres store, [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI).
@@ -109,6 +118,7 @@ flowchart LR
     loader -->|loads| mlflow_ds
     loader -->|loads| arize_ds
     mlflow_ds -->|loads dataset| evals
+    arize_ds -->|loads dataset| evals
 ```
 
 Evaluation flow, step by step:
@@ -116,7 +126,7 @@ Evaluation flow, step by step:
 - **Datasets** — stored in the git repo as the source of truth.
 - **Jinja logic** — dataset records can use Jinja templating to render prompts before they are sent to the agent.
 - **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Arize. It can load multiple datasets and merge them into a single MLflow or Arize dataset.
-- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow.
+- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow or Arize depending on the selected platform.
 
 ## Configuration
 

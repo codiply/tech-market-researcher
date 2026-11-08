@@ -41,7 +41,7 @@ Starts an interactive chat REPL against the MLflow AI Gateway configured in `.en
 uv run evals
 ```
 
-Runs the agent against the evaluation dataset stored in MLflow; each record is scored by an LLM judge served through the AI Gateway, and the results are stored as MLflow evaluation runs. Flags: `--agent-config-name` (name of the agent config to load, default `base`), `--evals-config-name` (name of the evaluation config under `config/evaluations/mlflow/`, default `main`), and `--platform` (`mlflow` or `arize`; default `mlflow` — only `mlflow` is implemented). Requires the docker compose stack to be running and the dataset to have been bootstrapped.
+Runs the agent against an evaluation dataset; each record is scored by an LLM judge served through the AI Gateway. The platform is selected with `--platform` (`mlflow`, default, or `arize`): with `mlflow` the results are stored as MLflow evaluation runs under the dataset's experiment, and with `arize` they are stored as a Phoenix experiment attached to the dataset. Flags: `--agent-config-name` (name of the agent config to load, default `base`), `--evals-config-name` (name of the evaluation config under `config/evaluations/<platform>/`, default `main`), and `--platform` (`mlflow` or `arize`, default `mlflow`). Requires the docker compose stack to be running and the dataset to have been bootstrapped.
 
 ## Common commands
 

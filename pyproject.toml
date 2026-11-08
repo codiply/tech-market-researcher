@@ -23,6 +23,7 @@ dependencies = [
     "tavily-python~=0.8.5",
     "httpx~=0.28.1",
     "markdownify~=1.2.3",
+    "arize-phoenix~=21.0.0",
 ]
 
 [project.scripts]
