@@ -14,6 +14,10 @@ Always pin docker images in `docker-compose.yml` to a specific version tag, neve
 
 The diagrams live in `design.md` (linked from the README). The main architecture diagram does not include the bootstrap script itself; the separate `Bootstrapping` diagram covers the services it provisions. Node names should stay consistent between the diagrams. Remind the user to update them whenever the implementation changes and a diagram no longer matches.
 
+## Documentation
+
+After completing a change, check the README and design.md for statements that are now outdated or missing a newly user-visible behavior, and remind the user of anything that needs updating.
+
 ## Tests
 
 Do not write new tests unless explicitly instructed to. Modifying or extending existing tests is allowed, but only by following an already established test pattern. Do not introduce new types of tests.
