@@ -4,9 +4,11 @@ import os
 from collections.abc import Mapping
 from typing import Any, cast
 
+from opentelemetry.trace import Tracer
 from phoenix.client.resources.experiments.types import EvalsEvaluator
 from phoenix.evals.evaluators import ClassificationEvaluator
-from phoenix.evals.llm import LLM
+from phoenix.evals.llm import LLM, PromptLike
+from phoenix.evals.llm.types import ObjectGenerationMethod
 from phoenix.evals.metrics import (
     ConcisenessEvaluator,
     CorrectnessEvaluator,
@@ -21,6 +23,24 @@ from evaluations.arize.configuration import ArizeEvaluationConfig, BaseEvaluator
 GATEWAY_BASE_PATH = "/gateway/mlflow/v1"
 
 
+class JudgeLLM(LLM):
+    """Gateway judge LLM that generates objects via tool calling, never structured output.
+
+    Gateway models such as Bedrock's Nova ignore the strict json_schema response_format and
+    return JSON wrapped in markdown fences. The adapter's AUTO discovery only falls back to
+    tool calling on a BadRequestError, which never happens, so its json.loads crashes; tool
+    calling is respected by all gateway models.
+    """
+
+    def generate_object(
+        self, prompt: PromptLike, schema: dict[str, Any], tracer: Tracer | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        kwargs.pop("method", None)
+        return super().generate_object(
+            prompt, schema, tracer=tracer, method=ObjectGenerationMethod.TOOL_CALLING, **kwargs
+        )
+
+
 def _gateway_base_url() -> str:
     """Return the OpenAI-compatible gateway base URL as seen from this host."""
     return os.environ["MLFLOW_SERVER_URI"].rstrip("/") + GATEWAY_BASE_PATH
@@ -28,7 +48,7 @@ def _gateway_base_url() -> str:
 
 def _judge_llm(config: ArizeEvaluationConfig, evaluator_config: BaseEvaluatorConfig) -> LLM:
     """Return the judge LLM for an evaluator, honoring any per-evaluator model override."""
-    return LLM(
+    return JudgeLLM(
         provider="openai",
         model=evaluator_config.model_name_override or config.judge_model_name,
         base_url=_gateway_base_url(),
