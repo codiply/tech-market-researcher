@@ -6,4 +6,4 @@
     - "MLflow is open-source"
     - "It is an AI engineering platform"
   tags:
-    capability_under_test: search
+    capability_under_test: web_search

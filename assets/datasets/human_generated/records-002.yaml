@@ -8,4 +8,4 @@
   guidelines:
   - The agent must use a search tool.
   tags:
-    capability_under_test: search
+    capability_under_test: web_search

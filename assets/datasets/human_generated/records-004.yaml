@@ -1,0 +1,10 @@
+- input:
+    messages:
+    - role: user
+      content: What is the Nvidia stock price today?
+  expected_tool_calls:
+  - name: web_search
+    arguments:
+      query: Nvidia stock price today
+  tags:
+    capability_under_test: web_search

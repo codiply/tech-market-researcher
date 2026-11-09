@@ -121,6 +121,7 @@ class DatasetFiltersConfig(BasePydanticModel):
 
     has_expected_response: bool | None = None
     has_expected_facts: bool | None = None
+    has_expected_tool_calls: bool | None = None
     has_guidelines: bool | None = None
 
 

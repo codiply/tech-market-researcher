@@ -20,6 +20,10 @@ def apply_filters(records: list[DatasetRecord], filters: DatasetFiltersConfig) -
             has_expected_facts = record.expected_facts is not None
             if has_expected_facts != filters.has_expected_facts:
                 return False
+        if filters.has_expected_tool_calls is not None:
+            has_expected_tool_calls = record.expected_tool_calls is not None
+            if has_expected_tool_calls != filters.has_expected_tool_calls:
+                return False
         if filters.has_guidelines is not None:
             has_guidelines = len(record.guidelines) > 0
             if has_guidelines != filters.has_guidelines:

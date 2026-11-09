@@ -10,6 +10,13 @@ class Input(BaseModel):
     context: dict[str, str] = {}
 
 
+class ExpectedToolCall(BaseModel):
+    """A tool call expected for a record."""
+
+    name: str
+    arguments: dict[str, object] | None = None
+
+
 class DatasetRecord(BaseModel):
     """One record in a dataset YAML file."""
 
@@ -18,5 +25,6 @@ class DatasetRecord(BaseModel):
     disabled: bool = False
     expected_response: object | None = None
     expected_facts: list[str] | None = None
+    expected_tool_calls: list[ExpectedToolCall] | None = None
     guidelines: list[str] = []
     tags: dict[str, str] = {}

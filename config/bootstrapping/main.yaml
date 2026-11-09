@@ -50,6 +50,12 @@ mlflow:
       filters:
         has_expected_facts: true
     - experiment_name: tech-market-researcher
+      dataset_name: with_expected_tool_calls
+      local_directories:
+        - human_generated
+      filters:
+        has_expected_tool_calls: true
+    - experiment_name: tech-market-researcher
       dataset_name: mixed
       local_directories:
         - human_generated
@@ -70,6 +76,11 @@ arize:
         - human_generated
       filters:
         has_expected_facts: true
+    - dataset_name: with_expected_tool_calls
+      local_directories:
+        - human_generated
+      filters:
+        has_expected_tool_calls: true
     - dataset_name: mixed
       local_directories:
         - human_generated
