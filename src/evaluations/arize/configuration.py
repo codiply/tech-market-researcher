@@ -21,10 +21,10 @@ class BaseEvaluatorConfig(BasePydanticModel):
 class EvaluatorsConfig(BasePydanticModel):
     """Which evaluators to run, keyed by evaluator name."""
 
+    conciseness: BaseEvaluatorConfig
     correctness: BaseEvaluatorConfig
     hallucination: BaseEvaluatorConfig
     refusal: BaseEvaluatorConfig
-    conciseness: BaseEvaluatorConfig
 
 
 class ArizeEvaluationConfig(BasePydanticModel):

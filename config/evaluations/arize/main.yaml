@@ -1,11 +1,12 @@
 dataset_name: mixed
 judge_model_name: omlx.Qwen3.8-27B-oQ4e-mtp
+# Keep these in alphabetical order.
 evaluators:
+  conciseness:
+    enabled: false
   correctness:
     enabled: true
   hallucination:
     enabled: true
   refusal:
-    enabled: false
-  conciseness:
     enabled: false

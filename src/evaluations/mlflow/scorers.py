@@ -31,12 +31,19 @@ def _judge_model(config: MlflowEvaluationConfig, scorer_config: BaseScorerConfig
 def build_scorers_list(config: MlflowEvaluationConfig) -> list[Scorer]:  # pylint: disable=too-many-branches
     """Build the scorers enabled in the config; the judge goes through the AI Gateway."""
     scorers: list[Scorer] = []
+    # Keep these in alphabetical order.
     if config.scorers.completeness.enabled:
         scorers.append(Completeness(model=_judge_model(config, config.scorers.completeness)))
     if config.scorers.correctness.enabled:
         scorers.append(Correctness(model=_judge_model(config, config.scorers.correctness)))
     if config.scorers.equivalence.enabled:
-        scorers.append(Equivalence(model=_judge_model(config, config.scorers.equivalence)))
+        scorer_config = config.scorers.equivalence
+        scorers.append(
+            Equivalence(
+                model=_judge_model(config, scorer_config),
+                inference_params=scorer_config.inference_params,
+            )
+        )
     if config.scorers.expectations_guidelines.enabled:
         scorers.append(ExpectationsGuidelines(model=_judge_model(config, config.scorers.expectations_guidelines)))
     if config.scorers.fluency.enabled:
@@ -58,7 +65,13 @@ def build_scorers_list(config: MlflowEvaluationConfig) -> list[Scorer]:  # pylin
     if config.scorers.retrieval_groundedness.enabled:
         scorers.append(RetrievalGroundedness(model=_judge_model(config, config.scorers.retrieval_groundedness)))
     if config.scorers.retrieval_relevance.enabled:
-        scorers.append(RetrievalRelevance(model=_judge_model(config, config.scorers.retrieval_relevance)))
+        scorer_config = config.scorers.retrieval_relevance
+        scorers.append(
+            RetrievalRelevance(
+                model=_judge_model(config, scorer_config),
+                inference_params=scorer_config.inference_params,
+            )
+        )
     if config.scorers.retrieval_sufficiency.enabled:
         scorers.append(RetrievalSufficiency(model=_judge_model(config, config.scorers.retrieval_sufficiency)))
     if config.scorers.safety.enabled:
@@ -66,7 +79,14 @@ def build_scorers_list(config: MlflowEvaluationConfig) -> list[Scorer]:  # pylin
     if config.scorers.summarization.enabled:
         scorers.append(Summarization(model=_judge_model(config, config.scorers.summarization)))
     if config.scorers.tool_call_correctness.enabled:
-        scorers.append(ToolCallCorrectness(model=_judge_model(config, config.scorers.tool_call_correctness)))
+        tool_call_correctness_config = config.scorers.tool_call_correctness
+        scorers.append(
+            ToolCallCorrectness(
+                model=_judge_model(config, tool_call_correctness_config),
+                should_exact_match=tool_call_correctness_config.should_exact_match,
+                should_consider_ordering=tool_call_correctness_config.should_consider_ordering,
+            )
+        )
     if config.scorers.tool_call_efficiency.enabled:
         scorers.append(ToolCallEfficiency(model=_judge_model(config, config.scorers.tool_call_efficiency)))
     if not scorers:

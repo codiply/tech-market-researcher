@@ -1,6 +1,7 @@
 experiment_name: tech-market-researcher
 dataset_name: mixed
 judge_model_name: omlx.Qwen3.8-27B-oQ4e-mtp
+# Keep these in alphabetical order.
 scorers:
   completeness:
     enabled: true
@@ -8,6 +9,8 @@ scorers:
     enabled: true
   equivalence:
     enabled: true
+    inference_params:
+      temperature: 0.1
   expectations_guidelines:
     enabled: true
   fluency:
@@ -27,6 +30,8 @@ scorers:
     enabled: true
   retrieval_relevance:
     enabled: true
+    inference_params:
+      temperature: 0.1
   retrieval_sufficiency:
     enabled: true
   safety:
@@ -35,5 +40,7 @@ scorers:
     enabled: true
   tool_call_correctness:
     enabled: true
+    should_exact_match: false
+    should_consider_ordering: false
   tool_call_efficiency:
     enabled: true

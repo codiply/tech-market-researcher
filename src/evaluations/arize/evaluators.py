@@ -82,14 +82,15 @@ def _map_input(evaluator: ClassificationEvaluator) -> EvalsEvaluator:
 def build_evaluators_list(config: ArizeEvaluationConfig) -> list[EvalsEvaluator]:
     """Build the evaluators enabled in the config; the judge goes through the AI Gateway."""
     evaluators: list[EvalsEvaluator] = []
+    # Keep these in alphabetical order.
+    if config.evaluators.conciseness.enabled:
+        evaluators.append(_map_input(ConcisenessEvaluator(llm=_judge_llm(config, config.evaluators.conciseness))))
     if config.evaluators.correctness.enabled:
         evaluators.append(_map_input(CorrectnessEvaluator(llm=_judge_llm(config, config.evaluators.correctness))))
     if config.evaluators.hallucination.enabled:
         evaluators.append(_map_input(HallucinationEvaluator(llm=_judge_llm(config, config.evaluators.hallucination))))
     if config.evaluators.refusal.enabled:
         evaluators.append(_map_input(RefusalEvaluator(llm=_judge_llm(config, config.evaluators.refusal))))
-    if config.evaluators.conciseness.enabled:
-        evaluators.append(_map_input(ConcisenessEvaluator(llm=_judge_llm(config, config.evaluators.conciseness))))
     if not evaluators:
         raise ValueError("No evaluators are enabled in the evaluation config.")
     return evaluators

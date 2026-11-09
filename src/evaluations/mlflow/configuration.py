@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from typing import Any
 
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
@@ -16,6 +17,22 @@ class BaseScorerConfig(BasePydanticModel):
     enabled: bool = False
     # Override the judge model for this scorer; defaults to the global judge model.
     model_name_override: str | None = None
+
+
+class ScorerWithInferenceParamsConfig(BaseScorerConfig):
+    """Settings for scorers that accept judge sampling parameters."""
+
+    # Sampling parameters forwarded to the judge model, e.g. {temperature: 0.0}.
+    inference_params: dict[str, Any] | None = None
+
+
+class ToolCallCorrectnessScorerConfig(BaseScorerConfig):
+    """Settings for the `tool_call_correctness` scorer."""
+
+    # Compare tool calls exactly against expectations instead of using the judge model.
+    should_exact_match: bool = False
+    # Enforce the expected order of tool calls (only relevant with should_exact_match).
+    should_consider_ordering: bool = False
 
 
 class GuidelinesInstanceConfig(BasePydanticModel):
@@ -36,17 +53,17 @@ class ScorersConfig(BasePydanticModel):
 
     completeness: BaseScorerConfig
     correctness: BaseScorerConfig
-    equivalence: BaseScorerConfig
+    equivalence: ScorerWithInferenceParamsConfig
     expectations_guidelines: BaseScorerConfig
     fluency: BaseScorerConfig
     guidelines: GuidelinesScorerConfig
     relevance_to_query: BaseScorerConfig
     retrieval_groundedness: BaseScorerConfig
-    retrieval_relevance: BaseScorerConfig
+    retrieval_relevance: ScorerWithInferenceParamsConfig
     retrieval_sufficiency: BaseScorerConfig
     safety: BaseScorerConfig
     summarization: BaseScorerConfig
-    tool_call_correctness: BaseScorerConfig
+    tool_call_correctness: ToolCallCorrectnessScorerConfig
     tool_call_efficiency: BaseScorerConfig
 
 
