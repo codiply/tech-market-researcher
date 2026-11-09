@@ -223,9 +223,9 @@ services:
   # Arize: LLM/agent observability server + UI (traces, evals).
   # Pinned to a specific release tag; must be > 4.0 to support the SQL
   # (Postgres) backend.
-  arize:
+  arize_server:
     image: arizephoenix/phoenix:21.0.0
-    container_name: arize
+    container_name: arize_server
     depends_on:
       arize_db:
         condition: service_healthy

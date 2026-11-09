@@ -25,8 +25,8 @@ flowchart LR
         valkey["searxng_valkey<br/>Valkey (rate limiting)"]
         minio["minio<br/>S3 storage (MLflow artifacts)"]
         pgadmin["pgadmin<br/>Postgres web UI"]
-        subgraph arize_box["arize — Arize"]
-            arize["Observability<br/>& traces"]
+        subgraph arize_box["arize_server — Arize"]
+            arize_server["Observability<br/>& traces"]
             arize_datasets["Datasets<br/>& experiments"]
         end
         arize_db["arize_db<br/>Postgres 17"]
@@ -40,7 +40,7 @@ flowchart LR
 
     main -->|LLM requests| gateway
     main -->|trace logging| traces
-    main -->|trace logging| arize
+    main -->|trace logging| arize_server
     main -->|search tool| searxng
     main -->|search tool - alternative| tavily
     main -->|fetch_page tool| web
@@ -52,8 +52,8 @@ flowchart LR
     arize_evals -->|judge requests| gateway
     arize_evals -->|reads datasets| arize_datasets
     arize_evals -->|experiments| arize_datasets
-    arize -->|stores datasets & experiments| arize_datasets
-    arize -->|providers call LLMs via gateway| gateway
+    arize_server -->|stores datasets & experiments| arize_datasets
+    arize_server -->|providers call LLMs via gateway| gateway
     gateway -->|local model| macbook
     gateway -->|cloud model| aws
     searxng -->|queries| engines
@@ -61,7 +61,7 @@ flowchart LR
     mlflow_box -->|backend store| mlflow_db
     mlflow_box -->|artifacts| minio
     pgadmin -->|manages| mlflow_db
-    arize -->|backend store| arize_db
+    arize_server -->|backend store| arize_db
     pgadmin -->|manages| arize_db
 ```
 
@@ -85,14 +85,14 @@ flowchart LR
             datasets["Datasets"]
         end
         minio["minio<br/>S3 storage (MLflow artifacts)"]
-        arize["arize<br/>Arize (LLM observability)"]
+        arize_server["arize_server<br/>Arize (LLM observability)"]
     end
 
     bs -->|creates buckets| minio
     bs -->|configures gateways and models| gateway
     bs -->|creates experiments and loads datasets| datasets
-    bs -->|loads datasets| arize
-    bs -->|configures LLM providers and models| arize
+    bs -->|loads datasets| arize_server
+    bs -->|configures LLM providers and models| arize_server
 ```
 
 The script runs in this order:
@@ -180,7 +180,7 @@ flowchart TB
                 subgraph docker["Docker (docker compose)"]
                     gateway["AI Gateway<br/>/gateway/mlflow/v1"]
                     mlflow_ui["MLflow UI"]
-                    arize["Arize"]
+                    arize_server["Arize"]
                 end
                 main["Tech Market Researcher Agent<br/>(main / supervisor)"]
                 subgraph cli["CLI"]
@@ -194,7 +194,7 @@ flowchart TB
     vscode -->|SSH| cli
     vscode -->|Remote-SSH extension| code
     browser -->|VS Code exposes VM ports on 0.0.0.0| mlflow_ui
-    browser -->|VS Code exposes VM ports on 0.0.0.0| arize
+    browser -->|VS Code exposes VM ports on 0.0.0.0| arize_server
     pi -->|LLM requests| omix
     cli -->|runs| main
     main --> gateway
