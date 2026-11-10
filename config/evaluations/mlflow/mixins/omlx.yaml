@@ -1,0 +1,7 @@
+judge_model_name: omlx.Qwen3.8-27B-oQ4e-mtp
+harness:
+  max_workers: 1
+  max_scorer_workers: 1
+  predict_rate_limit: 1
+  scorer_rate_limit: 1
+  max_retries: 3

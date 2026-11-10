@@ -8,7 +8,7 @@ from mlflow.genai.scorers import Scorer
 
 from evaluations.common.constants import EVALS_RUN_NAME_PREFIX
 from evaluations.common.runtime_context import build_runtime_context
-from evaluations.mlflow.configuration import MlflowEvaluationConfig
+from evaluations.mlflow.configuration import HarnessConfig, MlflowEvaluationConfig
 from evaluations.mlflow.scorers import build_scorers_list
 from tech_market_researcher.agents.main import TechMarketResearcherAgent
 
@@ -33,8 +33,26 @@ def _run_name() -> str:
     return f"{EVALS_RUN_NAME_PREFIX}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
 
+def _apply_harness_env(harness: HarnessConfig) -> None:
+    """Export MLflow evaluation-harness env vars (MLFLOW_GENAI_EVAL_*) from the config.
+
+    Unset (None) values are left to the MLflow defaults.
+    """
+    values = {
+        "MLFLOW_GENAI_EVAL_MAX_WORKERS": harness.max_workers,
+        "MLFLOW_GENAI_EVAL_MAX_SCORER_WORKERS": harness.max_scorer_workers,
+        "MLFLOW_GENAI_EVAL_PREDICT_RATE_LIMIT": harness.predict_rate_limit,
+        "MLFLOW_GENAI_EVAL_SCORER_RATE_LIMIT": harness.scorer_rate_limit,
+        "MLFLOW_GENAI_EVAL_MAX_RETRIES": harness.max_retries,
+    }
+    for name, value in values.items():
+        if value is not None:
+            os.environ[name] = str(value)
+
+
 def mlflow_evaluate(config: MlflowEvaluationConfig, agent: TechMarketResearcherAgent) -> None:
     """Evaluate the agent against the MLflow dataset named by the config using its guidelines."""
+    _apply_harness_env(config.harness)
     mlflow.set_tracking_uri(os.environ["MLFLOW_SERVER_URI"].rstrip("/"))
     experiment = mlflow.set_experiment(config.experiment_name)
     # The run is started explicitly so its name is ours; genai.evaluate reuses the active run.

@@ -1,0 +1,5 @@
+judge_model_name: bedrock.eu.amazon.nova-pro-v1
+harness:
+  max_workers: 10
+  max_scorer_workers: 10
+  max_retries: 3

@@ -67,6 +67,25 @@ class ScorersConfig(BasePydanticModel):
     tool_call_efficiency: BaseScorerConfig
 
 
+class HarnessConfig(BasePydanticModel):
+    """Concurrency and rate-limit settings for the MLflow evaluation harness.
+
+    Values are applied as MLFLOW_GENAI_EVAL_* environment variables before the run
+    starts. ``None`` leaves the variable unset so the MLflow default applies.
+    """
+
+    # Max concurrent agent (predict_fn) invocations.
+    max_workers: int | None = None
+    # Max concurrent scorers per record.
+    max_scorer_workers: int | None = None
+    # Max agent invocations per second; 0 disables rate limiting.
+    predict_rate_limit: int | float | None = None
+    # Max scorer (judge) calls per second; 0 disables. Default is predict_rate x num_scorers.
+    scorer_rate_limit: int | float | None = None
+    # Retries on 429 errors for both predict_fn and scorer calls; 0 disables.
+    max_retries: int | None = None
+
+
 class MlflowEvaluationConfig(BasePydanticModel):
     """Evaluation settings. The judge runs against an endpoint of the MLflow AI Gateway."""
 
@@ -74,6 +93,7 @@ class MlflowEvaluationConfig(BasePydanticModel):
     dataset_name: str
     judge_model_name: str
     scorers: ScorersConfig
+    harness: HarnessConfig = HarnessConfig()
 
 
 # pylint: disable=duplicate-code  # Same lazy-loader pattern as the other configuration.py files.
