@@ -2,11 +2,43 @@ dataset_name: mixed
 judge_model_name: omlx.Qwen3.8-27B-oQ4e-mtp
 # Keep these in alphabetical order.
 evaluators:
+  completeness:
+    enabled: true
   conciseness:
-    enabled: false
+    enabled: true
   correctness:
+    enabled: true
+  document_relevance:
+    enabled: true
+  expected_facts:
+    enabled: true
+  exact_match:
+    enabled: true
+  faithfulness:
+    enabled: true
+  guidelines:
     enabled: true
   hallucination:
     enabled: true
-  refusal:
+  matches_regex:
+    # Requires a non-empty `pattern`; disabled until one is chosen.
     enabled: false
+    pattern: ""
+  pii_detection:
+    enabled: true
+  precision_recall:
+    enabled: true
+  refusal:
+    enabled: true
+  retrieval_relevance:
+    enabled: true
+  tool_invocation:
+    enabled: true
+  tool_response_handling:
+    enabled: true
+  tool_selection:
+    enabled: true
+  toxicity:
+    enabled: true
+  user_friction:
+    enabled: true

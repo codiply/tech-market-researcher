@@ -28,14 +28,22 @@ class ArizeExample(BaseModel):
 def to_arize_example(record: DatasetRecord) -> ArizeExample:
     """Map a local dataset record to its Arize representation.
 
-    guidelines and tags (when present) are attached under example metadata.
+    Guidelines and tags go to example metadata; the expectations go to the example output
+    (the record's expected/reference output). The evaluations read both places back:
+    see the field convention documented in evaluations/arize/evaluators.py.
     """
     metadata: dict[str, object] = {}
     if record.guidelines:
         metadata["guidelines"] = record.guidelines
     if record.tags:
         metadata["tags"] = record.tags
-    output: dict[str, object] = {"expected_response": record.expected_response} if record.expected_response else {}
+    output: dict[str, object] = {}
+    if record.expected_response:
+        output["expected_response"] = record.expected_response
+    if record.expected_facts:
+        output["expected_facts"] = record.expected_facts
+    if record.expected_tool_calls:
+        output["expected_tool_calls"] = [call.model_dump(exclude_none=True) for call in record.expected_tool_calls]
     return ArizeExample(
         example_id=record.unique_id,
         input=record.input.model_dump(),

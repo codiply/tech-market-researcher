@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
@@ -18,13 +19,43 @@ class BaseEvaluatorConfig(BasePydanticModel):
     model_name_override: str | None = None
 
 
+class MatchesRegexConfig(BaseEvaluatorConfig):
+    """`matches_regex` needs a regex `pattern` to match the agent's answer against."""
+
+    pattern: str = ""
+
+
+class PrecisionRecallConfig(BaseEvaluatorConfig):
+    """Parameters of the `precision_recall` code evaluator (F-beta scoring)."""
+
+    beta: float = 1.0
+    average: Literal["macro", "micro", "weighted"] = "macro"
+    positive_label: str | int | None = None
+    zero_division: float = 0.0
+
+
 class EvaluatorsConfig(BasePydanticModel):
     """Which evaluators to run, keyed by evaluator name."""
 
+    completeness: BaseEvaluatorConfig
     conciseness: BaseEvaluatorConfig
     correctness: BaseEvaluatorConfig
+    document_relevance: BaseEvaluatorConfig
+    expected_facts: BaseEvaluatorConfig
+    exact_match: BaseEvaluatorConfig
+    faithfulness: BaseEvaluatorConfig
+    guidelines: BaseEvaluatorConfig
     hallucination: BaseEvaluatorConfig
+    matches_regex: MatchesRegexConfig
+    pii_detection: BaseEvaluatorConfig
+    precision_recall: PrecisionRecallConfig
     refusal: BaseEvaluatorConfig
+    retrieval_relevance: BaseEvaluatorConfig
+    tool_invocation: BaseEvaluatorConfig
+    tool_response_handling: BaseEvaluatorConfig
+    tool_selection: BaseEvaluatorConfig
+    toxicity: BaseEvaluatorConfig
+    user_friction: BaseEvaluatorConfig
 
 
 class ArizeEvaluationConfig(BasePydanticModel):
