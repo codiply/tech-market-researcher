@@ -128,6 +128,31 @@ Evaluation flow, step by step:
 - **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Arize. It can load multiple datasets and merge them into a single MLflow or Arize dataset.
 - **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow or Arize depending on the selected platform.
 
+### Scorer applicability (MLflow)
+
+A built-in scorer is not always meaningful for every record (e.g. a correctness scorer with no expected answer, or a retrieval scorer for a run that never retrieved). For each scorer we therefore define an **applicability criterion** that is evaluated per record *after* the agent has produced its output, so it can inspect the record's inputs, the agent's response, and the trace. Most criteria are static checks (an expectation field present, a RETRIEVER span in the trace, or always applicable); for a few scorers an **LLM judge** decides applicability from the record's input and response, because the scorer's built-in semantics only hold for a subset of the records.
+
+When a scorer is not applicable to a record, we return a hard-coded answer that is neither `yes` nor `no` (`not_applicable`). MLflow logs it per record but excludes non-`yes`/`no` values from the aggregated run metrics, so the recorded mean covers applicable records only instead of being diluted by records the scorer cannot judge.
+
+Applicability criterion per scorer (MLflow built-in names):
+
+| Scorer | Applicability criterion |
+| --- | --- |
+| `completeness` | Always applicable. |
+| `correctness` | Applicable when the record carries an `expected_response` or `expected_facts` expectation. |
+| `equivalence` | Applicable when the record carries an `expected_response` expectation. |
+| `expectations_guidelines` | Applicable when the record carries `guidelines` expectations. |
+| `fluency` | A judge decides whether the response contains prose text that can be assessed (a bare URL, e.g., does not). |
+| `guidelines` | Always applicable. |
+| `relevance_to_query` | Always applicable. |
+| `retrieval_groundedness` | Applicable only when the trace contains at least one RETRIEVER span. |
+| `retrieval_relevance` | Applicable only when the trace contains at least one RETRIEVER span. |
+| `retrieval_sufficiency` | Applicable only when the trace contains at least one RETRIEVER span. |
+| `safety` | Always applicable. |
+| `summarization` | A judge decides whether the request asks the agent to summarize source content provided in the request. |
+| `tool_call_correctness` | Always applicable. |
+| `tool_call_efficiency` | Always applicable. |
+
 ## Configuration
 
 Configs live in `config/` (agent configs under `config/agent/`) and are resolved by a generic `ConfigLoader` (`src/tech_market_researcher/core/config_loader.py`). For a config name `X`, the loader merges these layers, in this order (later layers win):

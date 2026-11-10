@@ -6,7 +6,9 @@
     context:
       time_zone: {{ time_zone }}
   guidelines:
-  - The agent must use the tool `current_datetime` and the response must contain the string `({{ time_zone }})`.
+  - The response must contain the string `({{ time_zone }})`.
+  expected_tool_calls:
+  - name: current_datetime
   tags:
     capability_under_test: current_datetime
 {%- endfor %}
