@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
+
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
 from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH, DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR
@@ -58,12 +60,25 @@ class EvaluatorsConfig(BasePydanticModel):
     user_friction: BaseEvaluatorConfig
 
 
+class HarnessConfig(BasePydanticModel):
+    """Concurrency settings for the Arize evaluation run.
+
+    ``max_concurrent`` is passed as the `concurrency` parameter of the Phoenix async
+    experiment runner, which bounds the tasks and evaluations in flight.
+    ``None`` or ``0`` leaves the Phoenix default (3) in place.
+    """
+
+    # Max concurrent gateway requests (agent invocations and judge calls combined); 0 means no limit.
+    max_concurrent: int | None = Field(default=None, ge=0)
+
+
 class ArizeEvaluationConfig(BasePydanticModel):
     """Evaluation settings. The judge runs against an endpoint of the MLflow AI Gateway."""
 
     dataset_name: str
     judge_model_name: str
     evaluators: EvaluatorsConfig
+    harness: HarnessConfig = HarnessConfig()
 
 
 # pylint: disable=duplicate-code  # Same lazy-loader pattern as the other configuration.py files.

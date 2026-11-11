@@ -1,11 +1,12 @@
 """Arize (Phoenix) evaluation runner."""
 
+import asyncio
 import os
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from phoenix.client import Client
+from phoenix.client import AsyncClient
 
 from evaluations.arize.configuration import ArizeEvaluationConfig
 from evaluations.arize.evaluators import build_evaluators_list
@@ -33,17 +34,27 @@ def _run_name() -> str:
 
 def arize_evaluate(config: ArizeEvaluationConfig, agent: TechMarketResearcherAgent) -> None:
     """Evaluate the agent against the Arize dataset named by the config using its evaluators."""
-    client = Client(base_url=os.environ[ARIZE_SERVER_URI_ENV].rstrip("/"))
-    dataset = client.datasets.get_dataset(dataset=config.dataset_name)
     evaluators = build_evaluators_list(config)
 
     def task(record_input: Mapping[str, Any]) -> str:
         """Run one agent turn for a dataset record and return the final response text."""
         return _predict_fn_for(agent, record_input)
 
-    client.experiments.run_experiment(
-        dataset=dataset,
-        task=task,
-        evaluators=evaluators,
-        experiment_name=_run_name(),
-    )
+    # Phoenix's sync API runs serially; the async API's `concurrency` parameter controls how
+    # many tasks and evaluations run in parallel. Unset/0 leaves the Phoenix default (3).
+    extra: dict[str, Any] = {}
+    if config.harness.max_concurrent:
+        extra["concurrency"] = config.harness.max_concurrent
+
+    async def run() -> None:
+        client = AsyncClient(base_url=os.environ[ARIZE_SERVER_URI_ENV].rstrip("/"))
+        dataset = await client.datasets.get_dataset(dataset=config.dataset_name)
+        await client.experiments.run_experiment(
+            dataset=dataset,
+            task=task,
+            evaluators=evaluators,
+            experiment_name=_run_name(),
+            **extra,
+        )
+
+    asyncio.run(run())
