@@ -153,6 +153,40 @@ Applicability criterion per scorer (MLflow built-in names):
 | `tool_call_correctness` | Always applicable. |
 | `tool_call_efficiency` | Always applicable. |
 
+### Evaluator applicability (Arize)
+
+The same problem exists on the Arize platform: an evaluator is not always meaningful for every record. Phoenix differs from MLflow in that every logged evaluation counts toward the experiment mean and there is no `not_applicable` value to exclude from aggregation. The mechanism is therefore the inverse: a record the evaluator cannot judge must log **no evaluation at all**, so the mean covers applicable records only.
+
+Each evaluator is therefore built with an **applicability criterion** (in `src/evaluations/arize/evaluators.py`), evaluated per record against the example fields the evaluators read; the criterion is met when the corresponding field is present and non-empty. Arize criteria are static field checks (the example fields are known ahead of the run); unlike MLflow, no judge decides applicability.
+
+Field convention: expectations (`expected_response`, `expected_facts`, `expected_tool_calls`) live in the example's `output` field — the example's reference answer, which Phoenix passes to evaluators as `expected` — while supplementary annotations (`guidelines`, `tags`, `source_documents`, `available_tools`, `tool_calls`, `tool_results`) live in the example's free-form `metadata` field. The criteria below refer to those fields.
+
+Applicability criterion per evaluator:
+
+| Evaluator | Applicability criterion |
+| --- | --- |
+| `completeness` | Always applicable. |
+| `conciseness` | Always applicable. |
+| `correctness` | Applicable when the record carries an `expected_response` or `expected_facts` expectation. |
+| `document_relevance` | Applicable only when the record carries `source_documents` metadata. |
+| `expected_facts` | Applicable when the record carries an `expected_facts` expectation. |
+| `exact_match` | Applicable when the record carries an `expected_response` expectation. |
+| `faithfulness` | Applicable only when the record carries `source_documents` metadata. |
+| `guidelines` | Applicable when the record carries `guidelines` metadata. |
+| `hallucination` | Applicable only when the record carries `tool_results` metadata (without the tool results the judge cannot verify the response's claims). |
+| `matches_regex` | Always applicable (code evaluator; disabled until a pattern is chosen). |
+| `pii_detection` | Always applicable. |
+| `precision_recall` | Applicable when the record carries an `expected_tool_calls` expectation. |
+| `refusal` | Always applicable. |
+| `retrieval_relevance` | Applicable only when the record carries `source_documents` metadata. |
+| `tool_invocation` | Applicable only when the record carries `available_tools` metadata. |
+| `tool_response_handling` | Applicable only when the record carries `tool_calls` metadata (the agent made tool calls). |
+| `tool_selection` | Applicable only when the record carries `available_tools` metadata. |
+| `toxicity` | Always applicable. |
+| `user_friction` | Always applicable. |
+
+Note: the current datasets do not yet populate `source_documents`, `available_tools`, `tool_calls` or `tool_results` metadata, so the retrieval, tool and hallucination evaluators are never applicable and log no metrics; their metrics appear as soon as the bootstrap attaches those fields to the examples.
+
 ## Configuration
 
 Configs live in `config/` (agent configs under `config/agent/`) and are resolved by a generic `ConfigLoader` (`src/tech_market_researcher/core/config_loader.py`). For a config name `X`, the loader merges these layers, in this order (later layers win):
