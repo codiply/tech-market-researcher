@@ -59,6 +59,7 @@ max-line-length = 120
 
 [tool.mypy]
 python_version = "3.14"
+mypy_path = "src"
 
 [[tool.mypy.overrides]]
 module = "tavily"
