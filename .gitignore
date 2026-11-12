@@ -10,6 +10,8 @@ __pycache__/
 .venv/
 build/
 dist/
+.mypy_cache/
+.pytest_cache/
 
 # MLflow local fallback DB (created if a client runs without a tracking URI)
 mlflow.db
@@ -17,6 +19,9 @@ mlruns/
 
 # Debugging artifacts
 .debug/
+
+# Agent local state
+.pi/
 
 # Local config overrides (never committed)
 config/**/*.local.yaml
