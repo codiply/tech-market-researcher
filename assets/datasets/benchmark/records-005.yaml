@@ -1,0 +1,23 @@
+- input:
+    messages:
+    - role: user
+      content: >-
+        What are the main components of the Kubernetes control plane, and what role does
+        etcd play in them?
+  source_documents:
+    - >-
+      The Kubernetes control plane consists of the kube-apiserver, the kube-scheduler, the
+      kube-controller-manager and etcd. The kube-apiserver is the entry point to all cluster
+      operations. The kube-scheduler assigns new pods to suitable nodes. The
+      kube-controller-manager runs the controllers that reconcile the desired state of the
+      cluster with its actual state.
+    - >-
+      etcd is a distributed, consistent, highly available key-value store that serves as the
+      backing store for Kubernetes. All cluster state, including nodes, pods, services and
+      other resources, is stored in etcd, and the other control-plane components read and
+      write this state through the API server.
+  expected_facts:
+    - "The control plane includes the kube-apiserver, kube-scheduler, kube-controller-manager and etcd"
+    - "etcd is the key-value store that holds the cluster state"
+  tags:
+    capability_under_test: source_documents

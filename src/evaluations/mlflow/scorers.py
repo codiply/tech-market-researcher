@@ -24,7 +24,9 @@ from mlflow.genai.scorers import (
 )
 from mlflow.genai.utils.trace_utils import parse_inputs_to_str, parse_outputs_to_str
 
+from evaluations.common.fields import get_field, get_field_list
 from evaluations.mlflow.configuration import BaseScorerConfig, MlflowEvaluationConfig
+from tech_market_researcher.core.common import BasePydanticModel
 
 # Logged per record for scorers a dataset record cannot satisfy; MLflow excludes any
 # non-yes/no string from the aggregated run metrics, so the mean covers applicable
@@ -57,6 +59,7 @@ class ScorerType(str, Enum):
     RETRIEVAL_RELEVANCE = "retrieval_relevance"
     RETRIEVAL_SUFFICIENCY = "retrieval_sufficiency"
     SAFETY = "safety"
+    SOURCE_DOCUMENT_GROUNDEDNESS = "source_document_groundedness"
     SUMMARIZATION = "summarization"
     TOOL_CALL_CORRECTNESS = "tool_call_correctness"
     TOOL_CALL_EFFICIENCY = "tool_call_efficiency"
@@ -67,7 +70,7 @@ def _always_applicable(**_kwargs: Any) -> bool:
 
 
 def _has_expectation(expectations: dict[str, Any] | None, field: str) -> bool:
-    return bool((expectations or {}).get(field))
+    return bool(get_field(expectations, field))
 
 
 def _any_expectation(*fields: str) -> ApplicabilityFunction:
@@ -75,6 +78,15 @@ def _any_expectation(*fields: str) -> ApplicabilityFunction:
 
     def applicable(expectations=None, **_kwargs: Any) -> bool:
         return any(_has_expectation(expectations, field) for field in fields)
+
+    return applicable
+
+
+def _all_expectations(*fields: str) -> ApplicabilityFunction:
+    """Return an applicability function that is true when all of the given expectation fields are present."""
+
+    def applicable(expectations=None, **_kwargs: Any) -> bool:
+        return all(_has_expectation(expectations, field) for field in fields)
 
     return applicable
 
@@ -145,6 +157,40 @@ def _default_judge_model(config: MlflowEvaluationConfig) -> str:
 def _judge_model(config: MlflowEvaluationConfig, scorer_config: BaseScorerConfig) -> str:
     """Return the judge model for a scorer, honoring any per-scorer override."""
     return f"gateway:/{scorer_config.model_name_override or config.judge_model_name}"
+
+
+class JudgeContext(BasePydanticModel):
+    """The record fields a context builder maps to the judge question's variables."""
+
+    expectations: dict[str, Any] | None
+    response: str
+
+
+JudgeContextBuilder = Callable[[JudgeContext], dict[str, str]]
+
+
+def _custom_judge_scorer(
+    name: str,
+    description: str,
+    question: str,
+    context_builder: JudgeContextBuilder,
+    model: str,
+) -> Scorer:
+    """Build a yes/no LLM-judge scorer over the record's fields, like the built-in guidelines judges.
+
+    ``context_builder`` maps the record's expectations and response to the named variables the
+    judge question refers to; the scorer returns the judge's yes/no answer.
+    """
+
+    @scorer(name=name, description=description, timeout=SCORER_TIMEOUT_SECONDS)
+    def judge(_inputs=None, outputs=None, expectations=None, _trace=None):
+        # The judge scores only the expectations and the response, so the inputs and the
+        # trace are unused by design (the underscore prefix keeps pylint happy).
+        context = context_builder(JudgeContext(expectations=expectations, response=parse_outputs_to_str(outputs)))
+        feedback = meets_guidelines(guidelines=[question], context=context, name=name, model=model)
+        return str(feedback.value)
+
+    return judge
 
 
 # The built-in scorers are defined in MLflow here:
@@ -265,6 +311,41 @@ def _build_relevance_to_query_scorers(config: MlflowEvaluationConfig) -> list[Sc
                 timeout=SCORER_TIMEOUT_SECONDS,
             ),
             _always_applicable,
+        )
+    ]
+
+
+def _build_source_document_groundedness_scorers(config: MlflowEvaluationConfig) -> list[Scorer]:
+    """Build the `source_document_groundedness` scorer(s), if enabled.
+
+    Judges the response against the record's `source_documents` expectation: every claim in
+    the response must be supported by the provided documents.
+    """
+    scorer_config = config.scorers.source_document_groundedness
+    if not scorer_config.enabled:
+        return []
+    question = (
+        "Is the response consistent with the provided source documents, containing no factual "
+        "claim that contradicts them? Answer no if any claim in the response contradicts a fact "
+        "stated in the source documents."
+    )
+
+    def context(ctx: JudgeContext) -> dict[str, str]:
+        return {
+            "source_documents": "\n\n".join(get_field_list(ctx.expectations, "source_documents")),
+            "response": ctx.response,
+        }
+
+    return [
+        wrap(
+            _custom_judge_scorer(
+                name="source_document_groundedness",
+                description="Scores whether the response contradicts the record's source documents.",
+                question=question,
+                context_builder=context,
+                model=_judge_model(config, scorer_config),
+            ),
+            _any_expectation("source_documents"),
         )
     ]
 
@@ -399,6 +480,7 @@ _SCORERS_BUILDERS: dict[ScorerType, ScorersBuilder] = {
     ScorerType.RETRIEVAL_RELEVANCE: _build_retrieval_relevance_scorers,
     ScorerType.RETRIEVAL_SUFFICIENCY: _build_retrieval_sufficiency_scorers,
     ScorerType.SAFETY: _build_safety_scorers,
+    ScorerType.SOURCE_DOCUMENT_GROUNDEDNESS: _build_source_document_groundedness_scorers,
     ScorerType.SUMMARIZATION: _build_summarization_scorers,
     ScorerType.TOOL_CALL_CORRECTNESS: _build_tool_call_correctness_scorers,
     ScorerType.TOOL_CALL_EFFICIENCY: _build_tool_call_efficiency_scorers,

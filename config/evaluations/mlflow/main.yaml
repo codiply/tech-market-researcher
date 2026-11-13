@@ -36,6 +36,8 @@ scorers:
     enabled: true
   safety:
     enabled: true
+  source_document_groundedness:
+    enabled: true
   summarization:
     enabled: true
   tool_call_correctness:

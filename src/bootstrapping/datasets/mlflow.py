@@ -20,6 +20,7 @@ class MlflowExpectations(BaseModel):
     expected_response: object | None = None
     expected_facts: list[str] | None = None
     expected_tool_calls: list[dict[str, object]] | None = None
+    source_documents: list[str] | None = None
 
 
 class MlflowDatasetRecord(BaseModel):
@@ -46,8 +47,15 @@ def to_mlflow_record(record: DatasetRecord) -> MlflowDatasetRecord:
                 if record.expected_tool_calls
                 else None
             ),
+            source_documents=record.source_documents or None,
         )
-        if (record.guidelines or record.expected_response or record.expected_facts or record.expected_tool_calls)
+        if (
+            record.guidelines
+            or record.expected_response
+            or record.expected_facts
+            or record.expected_tool_calls
+            or record.source_documents
+        )
         else None
     )
     return MlflowDatasetRecord(

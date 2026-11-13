@@ -1,23 +1,23 @@
 """Pydantic models for dataset records stored in assets/datasets/."""
 
-from pydantic import BaseModel
+from tech_market_researcher.core.common import BasePydanticModel
 
 
-class Input(BaseModel):
+class Input(BasePydanticModel):
     """What the agent receives for a record."""
 
     messages: list[dict[str, str]]
     context: dict[str, str] = {}
 
 
-class ExpectedToolCall(BaseModel):
+class ExpectedToolCall(BasePydanticModel):
     """A tool call expected for a record."""
 
     name: str
     arguments: dict[str, object] | None = None
 
 
-class DatasetRecord(BaseModel):
+class DatasetRecord(BasePydanticModel):
     """One record in a dataset YAML file."""
 
     unique_id: str
@@ -28,3 +28,4 @@ class DatasetRecord(BaseModel):
     expected_tool_calls: list[ExpectedToolCall] | None = None
     guidelines: list[str] = []
     tags: dict[str, str] = {}
+    source_documents: list[str] = []

@@ -62,6 +62,7 @@ class ScorersConfig(BasePydanticModel):
     retrieval_relevance: ScorerWithInferenceParamsConfig
     retrieval_sufficiency: BaseScorerConfig
     safety: BaseScorerConfig
+    source_document_groundedness: BaseScorerConfig
     summarization: BaseScorerConfig
     tool_call_correctness: ToolCallCorrectnessScorerConfig
     tool_call_efficiency: BaseScorerConfig

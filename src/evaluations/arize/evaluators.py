@@ -1,7 +1,6 @@
 """Builds the list of Arize evaluators from the evaluation config."""
 
 import asyncio
-import json
 import os
 from collections.abc import Mapping
 from enum import Enum
@@ -18,35 +17,30 @@ from phoenix.evals.metrics import (
     CompletenessEvaluator,
     ConcisenessEvaluator,
     CorrectnessEvaluator,
-    DocumentRelevanceEvaluator,
     FaithfulnessEvaluator,
     HallucinationEvaluator,
     MatchesRegex,
     PiiDetectionEvaluator,
-    PrecisionRecallFScore,
     RefusalEvaluator,
-    RetrievalRelevanceEvaluator,
-    ToolInvocationEvaluator,
-    ToolResponseHandlingEvaluator,
-    ToolSelectionEvaluator,
     ToxicityEvaluator,
     UserFrictionEvaluator,
 )
 from pydantic import BaseModel, Field
 
 from evaluations.arize.configuration import ArizeEvaluationConfig, BaseEvaluatorConfig
+from evaluations.common.fields import get_field, get_field_list
 
 # The judge talks to the OpenAI-compatible MLflow AI Gateway endpoint. Its base URL is derived
 # from the tracking server URI (see the agent's model_providers in config/agent/_common.yaml).
 GATEWAY_BASE_PATH = "/gateway/mlflow/v1"
 
 # The dataset example fields the evaluators read from, kept in sync with to_arize_example in
-# bootstrapping/datasets/arize.py:
-#   example output:   expected_response, expected_facts, expected_tool_calls
-#   example metadata: guidelines, tags, source_documents, available_tools, tool_calls,
-#                     tool_results
-# Not all of these are populated yet; the extractors below degrade to empty values so
-# evaluators stay runnable until the data is added to the datasets.
+# bootstrapping/datasets/arize.py (which uploads the full record; fields no evaluator reads
+# are inert on this platform):
+#   example output:   expected_response, expected_facts
+#   example metadata: guidelines, tags, source_documents
+# The benchmark dataset populates all of these; records without a field simply make the
+# evaluators that need it inapplicable.
 
 # Tool-calling retries: gateway judges occasionally honour a forced tool_choice and reply in
 # plain text instead, which the adapter surfaces as "No tool calls in response". That is a
@@ -133,47 +127,22 @@ def _conversation(input: Mapping[str, Any], output: Any = "") -> str:  # pylint:
 
 def _source_documents(metadata: Mapping[str, Any] | None = None) -> str:
     """Join the record's source documents (retrieved/search content) for grounding evaluators."""
-    return "\n\n".join(str(document) for document in (metadata or {}).get("source_documents") or [])
+    return "\n\n".join(str(document) for document in get_field_list(metadata, "source_documents"))
 
 
 def _guidelines(metadata: Mapping[str, Any] | None = None) -> str:
     """Return the record's guidelines as a bullet list."""
-    return "\n".join(f"- {guideline}" for guideline in (metadata or {}).get("guidelines") or [])
-
-
-def _available_tools(metadata: Mapping[str, Any] | None = None) -> str:
-    """Return the record's available tool schemas as JSON."""
-    return json.dumps((metadata or {}).get("available_tools") or [])
-
-
-def _tool_calls(metadata: Mapping[str, Any] | None = None) -> str:
-    """Return the agent's tool calls for the record as JSON."""
-    return json.dumps((metadata or {}).get("tool_calls") or [])
-
-
-def _tool_results(metadata: Mapping[str, Any] | None = None) -> str:
-    """Return the agent's tool results for the record as JSON."""
-    return json.dumps((metadata or {}).get("tool_results") or [])
+    return "\n".join(f"- {guideline}" for guideline in get_field_list(metadata, "guidelines"))
 
 
 def _expected_response(expected: Mapping[str, Any] | None = None) -> str:
     """Return the record's expected response as a string."""
-    return str((expected or {}).get("expected_response") or "")
+    return str(get_field(expected, "expected_response") or "")
 
 
 def _expected_facts(expected: Mapping[str, Any] | None = None) -> str:
     """Return the record's expected facts as a bullet list."""
-    return "\n".join(f"- {fact}" for fact in (expected or {}).get("expected_facts") or [])
-
-
-def _expected_tool_call_names(expected: Mapping[str, Any] | None = None) -> list[str]:
-    """Return the names of the record's expected tool calls."""
-    return [str(call["name"]) for call in (expected or {}).get("expected_tool_calls") or []]
-
-
-def _tool_call_names(metadata: Mapping[str, Any] | None = None) -> list[str]:
-    """Return the names of the agent's tool calls for the record."""
-    return [str(call["name"]) for call in (metadata or {}).get("tool_calls") or []]
+    return "\n".join(f"- {fact}" for fact in get_field_list(expected, "expected_facts"))
 
 
 # Evaluator applicability (the Arize mirror of the MLflow scorer applicability): a built-in
@@ -193,7 +162,7 @@ def _any_expected_field(*fields: str) -> ApplicabilityFunction:
     """Return an applicability function that is true when any of the given expected-output fields is present."""
 
     def applicable(expected=None, **_kwargs: Any) -> bool:
-        return any(bool((expected or {}).get(field)) for field in fields)
+        return any(bool(get_field(expected, field)) for field in fields)
 
     return applicable
 
@@ -202,7 +171,7 @@ def _any_metadata_field(*fields: str) -> ApplicabilityFunction:
     """Return an applicability function that is true when any of the given metadata fields is present."""
 
     def applicable(metadata=None, **_kwargs: Any) -> bool:
-        return any(bool((metadata or {}).get(field)) for field in fields)
+        return any(bool(get_field(metadata, field)) for field in fields)
 
     return applicable
 
@@ -376,20 +345,6 @@ def _build_correctness_evaluators(config: ArizeEvaluationConfig) -> list[ClientE
     return [_bind(evaluator, {"input": _user_message}, _any_expected_field("expected_response", "expected_facts"))]
 
 
-def _build_document_relevance_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
-    """Build the `document_relevance` evaluator(s), if enabled."""
-    if not config.evaluators.document_relevance.enabled:
-        return []
-    evaluator = DocumentRelevanceEvaluator(llm=_judge_llm(config, config.evaluators.document_relevance))
-    return [
-        _bind(
-            evaluator,
-            {"input": _user_message, "document_text": _source_documents},
-            _any_metadata_field("source_documents"),
-        )
-    ]
-
-
 def _build_expected_facts_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
     """Build the custom `expected_facts` evaluator(s), if enabled."""
     if not config.evaluators.expected_facts.enabled:
@@ -450,7 +405,7 @@ def _build_hallucination_evaluators(config: ArizeEvaluationConfig) -> list[Clien
     evaluator = HallucinationEvaluator(llm=_judge_llm(config, config.evaluators.hallucination))
     # The prompt treats `input` as the full record the assistant had access to; the record's
     # messages are the best stand-in until run-time tool calls can be attached to the task output.
-    return [_bind(evaluator, {"input": _record_transcript}, _any_metadata_field("tool_results"))]
+    return [_bind(evaluator, {"input": _record_transcript})]
 
 
 def _build_matches_regex_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
@@ -471,90 +426,12 @@ def _build_pii_detection_evaluators(config: ArizeEvaluationConfig) -> list[Clien
     return [_bind(evaluator, {"conversation": _conversation})]
 
 
-def _build_precision_recall_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
-    """Build the `precision_recall` code evaluator(s), if enabled. No judge LLM is needed.
-
-    Compares the record's expected tool call names to the agent's; the Phoenix experiment
-    client logs only the first produced score (precision), not recall/F.
-    """
-    evaluator_config = config.evaluators.precision_recall
-    if not evaluator_config.enabled:
-        return []
-    evaluator = PrecisionRecallFScore(
-        beta=evaluator_config.beta,
-        average=evaluator_config.average,
-        positive_label=evaluator_config.positive_label,
-        zero_division=evaluator_config.zero_division,
-    )
-    return [
-        _bind(
-            evaluator,
-            {"expected": _expected_tool_call_names, "output": _tool_call_names},
-            _any_expected_field("expected_tool_calls"),
-        )
-    ]
-
-
 def _build_refusal_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `refusal` evaluator(s), if enabled."""
     if not config.evaluators.refusal.enabled:
         return []
     evaluator = RefusalEvaluator(llm=_judge_llm(config, config.evaluators.refusal))
     return [_bind(evaluator, {"input": _user_message})]
-
-
-def _build_retrieval_relevance_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
-    """Build the `retrieval_relevance` evaluator(s), if enabled."""
-    if not config.evaluators.retrieval_relevance.enabled:
-        return []
-    evaluator = RetrievalRelevanceEvaluator(llm=_judge_llm(config, config.evaluators.retrieval_relevance))
-    return [
-        _bind(
-            evaluator, {"input": _user_message, "context": _source_documents}, _any_metadata_field("source_documents")
-        )
-    ]
-
-
-def _build_tool_invocation_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
-    """Build the `tool_invocation` evaluator(s), if enabled."""
-    if not config.evaluators.tool_invocation.enabled:
-        return []
-    evaluator = ToolInvocationEvaluator(llm=_judge_llm(config, config.evaluators.tool_invocation))
-    return [
-        _bind(
-            evaluator,
-            {"input": _user_message, "available_tools": _available_tools, "tool_selection": _tool_calls},
-            _any_metadata_field("available_tools"),
-        )
-    ]
-
-
-def _build_tool_response_handling_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
-    """Build the `tool_response_handling` evaluator(s), if enabled."""
-    if not config.evaluators.tool_response_handling.enabled:
-        return []
-    evaluator = ToolResponseHandlingEvaluator(llm=_judge_llm(config, config.evaluators.tool_response_handling))
-    return [
-        _bind(
-            evaluator,
-            {"input": _user_message, "tool_call": _tool_calls, "tool_result": _tool_results},
-            _any_metadata_field("tool_calls"),
-        )
-    ]
-
-
-def _build_tool_selection_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
-    """Build the `tool_selection` evaluator(s), if enabled."""
-    if not config.evaluators.tool_selection.enabled:
-        return []
-    evaluator = ToolSelectionEvaluator(llm=_judge_llm(config, config.evaluators.tool_selection))
-    return [
-        _bind(
-            evaluator,
-            {"input": _user_message, "available_tools": _available_tools, "tool_selection": _tool_calls},
-            _any_metadata_field("available_tools"),
-        )
-    ]
 
 
 def _build_toxicity_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
@@ -579,7 +456,6 @@ class EvaluatorType(str, Enum):
     COMPLETENESS = "completeness"
     CONCISENESS = "conciseness"
     CORRECTNESS = "correctness"
-    DOCUMENT_RELEVANCE = "document_relevance"
     EXPECTED_FACTS = "expected_facts"
     EXACT_MATCH = "exact_match"
     FAITHFULNESS = "faithfulness"
@@ -587,12 +463,7 @@ class EvaluatorType(str, Enum):
     HALLUCINATION = "hallucination"
     MATCHES_REGEX = "matches_regex"
     PII_DETECTION = "pii_detection"
-    PRECISION_RECALL = "precision_recall"
     REFUSAL = "refusal"
-    RETRIEVAL_RELEVANCE = "retrieval_relevance"
-    TOOL_INVOCATION = "tool_invocation"
-    TOOL_RESPONSE_HANDLING = "tool_response_handling"
-    TOOL_SELECTION = "tool_selection"
     TOXICITY = "toxicity"
     USER_FRICTION = "user_friction"
 
@@ -602,7 +473,6 @@ _EVALUATOR_BUILDERS: dict[EvaluatorType, EvaluatorBuilder] = {
     EvaluatorType.COMPLETENESS: _build_completeness_evaluators,
     EvaluatorType.CONCISENESS: _build_conciseness_evaluators,
     EvaluatorType.CORRECTNESS: _build_correctness_evaluators,
-    EvaluatorType.DOCUMENT_RELEVANCE: _build_document_relevance_evaluators,
     EvaluatorType.EXPECTED_FACTS: _build_expected_facts_evaluators,
     EvaluatorType.EXACT_MATCH: _build_exact_match_evaluators,
     EvaluatorType.FAITHFULNESS: _build_faithfulness_evaluators,
@@ -610,12 +480,7 @@ _EVALUATOR_BUILDERS: dict[EvaluatorType, EvaluatorBuilder] = {
     EvaluatorType.HALLUCINATION: _build_hallucination_evaluators,
     EvaluatorType.MATCHES_REGEX: _build_matches_regex_evaluators,
     EvaluatorType.PII_DETECTION: _build_pii_detection_evaluators,
-    EvaluatorType.PRECISION_RECALL: _build_precision_recall_evaluators,
     EvaluatorType.REFUSAL: _build_refusal_evaluators,
-    EvaluatorType.RETRIEVAL_RELEVANCE: _build_retrieval_relevance_evaluators,
-    EvaluatorType.TOOL_INVOCATION: _build_tool_invocation_evaluators,
-    EvaluatorType.TOOL_RESPONSE_HANDLING: _build_tool_response_handling_evaluators,
-    EvaluatorType.TOOL_SELECTION: _build_tool_selection_evaluators,
     EvaluatorType.TOXICITY: _build_toxicity_evaluators,
     EvaluatorType.USER_FRICTION: _build_user_friction_evaluators,
 }

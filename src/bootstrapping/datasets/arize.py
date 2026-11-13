@@ -37,6 +37,8 @@ def to_arize_example(record: DatasetRecord) -> ArizeExample:
         metadata["guidelines"] = record.guidelines
     if record.tags:
         metadata["tags"] = record.tags
+    if record.source_documents:
+        metadata["source_documents"] = record.source_documents
     output: dict[str, object] = {}
     if record.expected_response:
         output["expected_response"] = record.expected_response

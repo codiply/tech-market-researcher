@@ -1,5 +1,7 @@
 """Filtering dataset records loaded from assets/datasets/."""
 
+from collections.abc import Callable
+
 from bootstrapping.common.configuration import DatasetFiltersConfig
 from bootstrapping.datasets.model import DatasetRecord
 
@@ -10,24 +12,15 @@ def apply_filters(records: list[DatasetRecord], filters: DatasetFiltersConfig) -
     An unset filter (None) matches every record; the filters combine with a
     logical AND.
     """
+    checks: list[tuple[bool | None, Callable[[DatasetRecord], bool]]] = [
+        (filters.has_expected_response, lambda r: r.expected_response is not None),
+        (filters.has_expected_facts, lambda r: r.expected_facts is not None),
+        (filters.has_expected_tool_calls, lambda r: r.expected_tool_calls is not None),
+        (filters.has_guidelines, lambda r: len(r.guidelines) > 0),
+        (filters.has_source_documents, lambda r: len(r.source_documents) > 0),
+    ]
 
     def matches(record: DatasetRecord) -> bool:
-        if filters.has_expected_response is not None:
-            has_expected_response = record.expected_response is not None
-            if has_expected_response != filters.has_expected_response:
-                return False
-        if filters.has_expected_facts is not None:
-            has_expected_facts = record.expected_facts is not None
-            if has_expected_facts != filters.has_expected_facts:
-                return False
-        if filters.has_expected_tool_calls is not None:
-            has_expected_tool_calls = record.expected_tool_calls is not None
-            if has_expected_tool_calls != filters.has_expected_tool_calls:
-                return False
-        if filters.has_guidelines is not None:
-            has_guidelines = len(record.guidelines) > 0
-            if has_guidelines != filters.has_guidelines:
-                return False
-        return True
+        return all(actual(record) is configured for configured, actual in checks if configured is not None)
 
     return [record for record in records if matches(record)]

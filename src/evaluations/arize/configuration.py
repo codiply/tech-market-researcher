@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-from typing import Literal
 
 from pydantic import Field
 
@@ -27,22 +26,12 @@ class MatchesRegexConfig(BaseEvaluatorConfig):
     pattern: str = ""
 
 
-class PrecisionRecallConfig(BaseEvaluatorConfig):
-    """Parameters of the `precision_recall` code evaluator (F-beta scoring)."""
-
-    beta: float = 1.0
-    average: Literal["macro", "micro", "weighted"] = "macro"
-    positive_label: str | int | None = None
-    zero_division: float = 0.0
-
-
 class EvaluatorsConfig(BasePydanticModel):
     """Which evaluators to run, keyed by evaluator name."""
 
     completeness: BaseEvaluatorConfig
     conciseness: BaseEvaluatorConfig
     correctness: BaseEvaluatorConfig
-    document_relevance: BaseEvaluatorConfig
     expected_facts: BaseEvaluatorConfig
     exact_match: BaseEvaluatorConfig
     faithfulness: BaseEvaluatorConfig
@@ -50,12 +39,7 @@ class EvaluatorsConfig(BasePydanticModel):
     hallucination: BaseEvaluatorConfig
     matches_regex: MatchesRegexConfig
     pii_detection: BaseEvaluatorConfig
-    precision_recall: PrecisionRecallConfig
     refusal: BaseEvaluatorConfig
-    retrieval_relevance: BaseEvaluatorConfig
-    tool_invocation: BaseEvaluatorConfig
-    tool_response_handling: BaseEvaluatorConfig
-    tool_selection: BaseEvaluatorConfig
     toxicity: BaseEvaluatorConfig
     user_friction: BaseEvaluatorConfig
 

@@ -123,6 +123,7 @@ class DatasetFiltersConfig(BasePydanticModel):
     has_expected_facts: bool | None = None
     has_expected_tool_calls: bool | None = None
     has_guidelines: bool | None = None
+    has_source_documents: bool | None = None
 
 
 class DatasetSourceConfig(BasePydanticModel):

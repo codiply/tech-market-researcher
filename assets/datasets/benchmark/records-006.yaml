@@ -1,0 +1,14 @@
+- input:
+    messages:
+    - role: user
+      content: >-
+        Summarize the main points of this market note in at most three bullet points:
+        "The European server market grew 6% year over year in Q3 2026, driven by
+        hyperscaler data-center investments. Memory and storage prices rose 15% due to
+        supply constraints, squeezing margin in the consumer segment. AI accelerator
+        shipments are expected to outpace CPU shipments for the first time in Q4 2026."
+  expected_facts:
+    - "European server market grew 6% year over year in Q3 2026"
+    - "AI accelerator shipments are expected to outpace CPU shipments in Q4 2026"
+  tags:
+    capability_under_test: summarization

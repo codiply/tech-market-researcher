@@ -8,8 +8,6 @@ evaluators:
     enabled: true
   correctness:
     enabled: true
-  document_relevance:
-    enabled: true
   expected_facts:
     enabled: true
   exact_match:
@@ -26,17 +24,7 @@ evaluators:
     pattern: ""
   pii_detection:
     enabled: true
-  precision_recall:
-    enabled: true
   refusal:
-    enabled: true
-  retrieval_relevance:
-    enabled: true
-  tool_invocation:
-    enabled: true
-  tool_response_handling:
-    enabled: true
-  tool_selection:
     enabled: true
   toxicity:
     enabled: true
