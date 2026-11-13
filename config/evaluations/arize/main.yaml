@@ -1,4 +1,4 @@
-dataset_name: mixed
+dataset_name: benchmark
 judge_model_name: omlx.Qwen3.8-27B-oQ4e-mtp
 # Keep these in alphabetical order.
 evaluators:

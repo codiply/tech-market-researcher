@@ -32,58 +32,14 @@ mlflow:
       action: reject
   datasets:
     - experiment_name: tech-market-researcher
-      dataset_name: with_expected_response
+      dataset_name: benchmark
       local_directories:
-        - human_generated
-      filters:
-        has_expected_response: true
-    - experiment_name: tech-market-researcher
-      dataset_name: with_guideline
-      local_directories:
-        - human_generated
-      filters:
-        has_guidelines: true
-    - experiment_name: tech-market-researcher
-      dataset_name: with_expected_facts
-      local_directories:
-        - human_generated
-      filters:
-        has_expected_facts: true
-    - experiment_name: tech-market-researcher
-      dataset_name: with_expected_tool_calls
-      local_directories:
-        - human_generated
-      filters:
-        has_expected_tool_calls: true
-    - experiment_name: tech-market-researcher
-      dataset_name: mixed
-      local_directories:
-        - human_generated
+        - benchmark
 arize:
   datasets:
-    - dataset_name: with_expected_response
+    - dataset_name: benchmark
       local_directories:
-        - human_generated
-      filters:
-        has_expected_response: true
-    - dataset_name: with_guideline
-      local_directories:
-        - human_generated
-      filters:
-        has_guidelines: true
-    - dataset_name: with_expected_facts
-      local_directories:
-        - human_generated
-      filters:
-        has_expected_facts: true
-    - dataset_name: with_expected_tool_calls
-      local_directories:
-        - human_generated
-      filters:
-        has_expected_tool_calls: true
-    - dataset_name: mixed
-      local_directories:
-        - human_generated
+        - benchmark
   ai_providers:
     - provider_name: mlflow_ai_gateway
       description: MLflow AI Gateway
