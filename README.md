@@ -23,6 +23,7 @@ The stack exposes:
 | [MinIO](https://min.io) (UI) | [http://0.0.0.0:9001](http://0.0.0.0:9001) | log in with `minio` / `minio12345` (fixed local default; MinIO requires an 8+ char root password) |
 | [pgAdmin](https://www.pgadmin.org) (UI) | [http://0.0.0.0:5050](http://0.0.0.0:5050) | log in with `admin@example.com` / `pgadmin12345` (fixed local default, override with `PGADMIN_PASSWORD`); the MLflow and Phoenix databases are pre-configured with the `MLFLOW_DB_*` / `PHOENIX_DB_*` credentials from `.env` |
 | [Arize Phoenix](https://arize.com) (UI) | [http://0.0.0.0:6006](http://0.0.0.0:6006) | LLM/agent observability server + UI; also the OTLP HTTP collector on `6006` and gRPC collector on `4317` |
+| Web UI ([Gradio](https://gradio.app)) | [http://0.0.0.0:8899](http://0.0.0.0:8899) | chat UI for the agent; not part of the docker stack — started separately with `uv run agent_web_ui` |
 | [MinIO](https://min.io) (S3 API) | `http://0.0.0.0:9000` | S3 endpoint for MLflow artifacts (`MLFLOW_S3_ENDPOINT_URL`) |
 | MLflow database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5433` | backend store; credentials in `.env` (`MLFLOW_DB_*`) |
 | Phoenix database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5434` | backend store; credentials in `.env` (`PHOENIX_DB_*`) |
@@ -34,6 +35,14 @@ uv run agent_cli
 ```
 
 Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
+
+### Web UI
+
+```bash
+uv run agent_web_ui
+```
+
+Starts a [Gradio](https://gradio.app) chat web UI for the agent on port `8899`, listening on `0.0.0.0`, so it is reachable at `http://localhost:8899`. The only flag is `--config-name` (same semantics as the CLI); user id, session id and time zone are fixed to their defaults.
 
 ## Run the evaluations
 

@@ -24,10 +24,12 @@ dependencies = [
     "httpx~=0.28.1",
     "markdownify~=1.2.3",
     "arize-phoenix~=21.0.0",
+    "gradio~=6.32.0",
 ]
 
 [project.scripts]
 agent_cli = "tech_market_researcher.agent_cli:main"
+agent_web_ui = "tech_market_researcher.agent_web_ui:main"
 bootstrap = "bootstrapping.main:main"
 evals = "evaluations.main:main"
 
