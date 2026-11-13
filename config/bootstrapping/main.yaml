@@ -35,7 +35,7 @@ mlflow:
       dataset_name: benchmark
       local_directories:
         - benchmark
-arize:
+phoenix:
   datasets:
     - dataset_name: benchmark
       local_directories:

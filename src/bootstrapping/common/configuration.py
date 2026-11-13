@@ -140,19 +140,19 @@ class MlflowDatasetConfig(DatasetSourceConfig):
     experiment_name: str
 
 
-class ArizeDatasetConfig(DatasetSourceConfig):
-    """One dataset provisioned in Arize (Phoenix)."""
+class PhoenixDatasetConfig(DatasetSourceConfig):
+    """One dataset provisioned in Phoenix."""
 
     description: str | None = None
 
 
-class ArizeProviderSdk(str, Enum):
-    """LLM SDKs Arize (Phoenix) can use to talk to a provider."""
+class PhoenixProviderSdk(str, Enum):
+    """LLM SDKs Phoenix can use to talk to a provider."""
 
     OPENAI = "openai"
 
 
-class ArizeApiType(str, Enum):
+class PhoenixApiType(str, Enum):
     """OpenAI API surface the provider serves, as written in the config file."""
 
     CHAT_COMPLETIONS = "chat_completions"
@@ -164,10 +164,10 @@ class ArizeApiType(str, Enum):
         return self.value.upper()
 
 
-class ArizeOpenAISettings(BasePydanticModel):
-    """OpenAI-SDK settings for one Arize custom provider."""
+class PhoenixOpenAISettings(BasePydanticModel):
+    """OpenAI-SDK settings for one Phoenix custom provider."""
 
-    api_type: ArizeApiType
+    api_type: PhoenixApiType
     api_key_env_var_name: str | None = None
     api_base_url_env_var_name: str | None = None
 
@@ -186,18 +186,18 @@ class ArizeOpenAISettings(BasePydanticModel):
         return None
 
 
-class ArizeAIProviderConfig(BasePydanticModel):
-    """One custom LLM provider provisioned in Arize (Phoenix)."""
+class PhoenixAIProviderConfig(BasePydanticModel):
+    """One custom LLM provider provisioned in Phoenix."""
 
     provider_name: str
     description: str | None = None
-    sdk: ArizeProviderSdk
+    sdk: PhoenixProviderSdk
     provider_string: str
-    sdk_specific_settings: ArizeOpenAISettings
+    sdk_specific_settings: PhoenixOpenAISettings
 
 
-class ArizeModelCosts(BasePydanticModel):
-    """Token prices for one Arize model, in USD per million tokens.
+class PhoenixModelCosts(BasePydanticModel):
+    """Token prices for one Phoenix model, in USD per million tokens.
 
     Phoenix requires input and output prices; when omitted they are reported as
     zero. Omitted optional kinds are not reported to Phoenix at all.
@@ -210,13 +210,13 @@ class ArizeModelCosts(BasePydanticModel):
     reasoning: float | None = None
 
 
-class ArizeModelConfig(BasePydanticModel):
-    """One generative model provisioned in Arize for cost tracking."""
+class PhoenixModelConfig(BasePydanticModel):
+    """One generative model provisioned in Phoenix for cost tracking."""
 
     model_name: str
     name_pattern: str
     provider: str | None = None
-    costs: ArizeModelCosts = Field(default_factory=ArizeModelCosts)
+    costs: PhoenixModelCosts = Field(default_factory=PhoenixModelCosts)
 
     @field_validator("name_pattern")
     @classmethod
@@ -226,12 +226,12 @@ class ArizeModelConfig(BasePydanticModel):
         return pattern
 
 
-class ArizeConfig(BasePydanticModel):
-    """Arize (Phoenix) settings."""
+class PhoenixConfig(BasePydanticModel):
+    """Phoenix settings."""
 
-    datasets: list[ArizeDatasetConfig] = []
-    ai_providers: list[ArizeAIProviderConfig] = []
-    models: list[ArizeModelConfig] = []
+    datasets: list[PhoenixDatasetConfig] = []
+    ai_providers: list[PhoenixAIProviderConfig] = []
+    models: list[PhoenixModelConfig] = []
 
 
 class MlflowConfig(BasePydanticModel):
@@ -277,7 +277,7 @@ class BootstrapConfig(BasePydanticModel):
 
     mlflow: MlflowConfig
     s3: S3Config
-    arize: ArizeConfig
+    phoenix: PhoenixConfig
     debugging: DebuggingConfig = DebuggingConfig()
 
 

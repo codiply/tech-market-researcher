@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch an Arize (Phoenix) evaluation experiment's data: task runs, dataset
+"""Fetch a Phoenix evaluation experiment's data: task runs, dataset
 examples (inputs + expected outputs), and the per-run evaluator evaluations,
 so an agent can identify issues with the evaluation dataset or the evaluators
 (configuration or implementation).
@@ -19,15 +19,15 @@ import sys
 import httpx
 from phoenix.client import Client
 
-ARIZE_SERVER_URI = os.environ.get("ARIZE_SERVER_URI", "http://localhost:6006").rstrip("/")
+PHOENIX_SERVER_URI = os.environ.get("PHOENIX_SERVER_URI", "http://localhost:6006").rstrip("/")
 RUN_NAME_PREFIX = "evals-"
 EXPLANATION_MAX = 300
 RESPONSE_MAX = 500
 
 
 def make_client() -> Client:
-    """Return a client for the Arize (Phoenix) server."""
-    return Client(base_url=ARIZE_SERVER_URI)
+    """Return a client for the Phoenix server."""
+    return Client(base_url=PHOENIX_SERVER_URI)
 
 
 def all_experiments(client: Client):

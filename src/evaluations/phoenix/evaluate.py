@@ -1,4 +1,4 @@
-"""Arize (Phoenix) evaluation runner."""
+"""Phoenix evaluation runner."""
 
 import asyncio
 import os
@@ -8,14 +8,14 @@ from typing import Any
 
 from phoenix.client import AsyncClient
 
-from evaluations.arize.configuration import ArizeEvaluationConfig
-from evaluations.arize.evaluators import build_evaluators_list
 from evaluations.common.constants import EVALS_RUN_NAME_PREFIX
 from evaluations.common.runtime_context import build_runtime_context
+from evaluations.phoenix.configuration import PhoenixEvaluationConfig
+from evaluations.phoenix.evaluators import build_evaluators_list
 from tech_market_researcher.agents.main import TechMarketResearcherAgent
 
 # The Phoenix REST API base; the UI/collector ports are documented in .env.
-ARIZE_SERVER_URI_ENV = "ARIZE_SERVER_URI"
+PHOENIX_SERVER_URI_ENV = "PHOENIX_SERVER_URI"
 
 
 def _predict_fn_for(agent: TechMarketResearcherAgent, record_input: Mapping[str, Any]) -> str:
@@ -32,8 +32,8 @@ def _run_name() -> str:
     return f"{EVALS_RUN_NAME_PREFIX}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
 
-def arize_evaluate(config: ArizeEvaluationConfig, agent: TechMarketResearcherAgent) -> None:
-    """Evaluate the agent against the Arize dataset named by the config using its evaluators."""
+def phoenix_evaluate(config: PhoenixEvaluationConfig, agent: TechMarketResearcherAgent) -> None:
+    """Evaluate the agent against the Phoenix dataset named by the config using its evaluators."""
     evaluators = build_evaluators_list(config)
 
     def task(record_input: Mapping[str, Any]) -> str:
@@ -47,7 +47,7 @@ def arize_evaluate(config: ArizeEvaluationConfig, agent: TechMarketResearcherAge
         extra["concurrency"] = config.harness.max_concurrent
 
     async def run() -> None:
-        client = AsyncClient(base_url=os.environ[ARIZE_SERVER_URI_ENV].rstrip("/"))
+        client = AsyncClient(base_url=os.environ[PHOENIX_SERVER_URI_ENV].rstrip("/"))
         dataset = await client.datasets.get_dataset(dataset=config.dataset_name)
         await client.experiments.run_experiment(
             dataset=dataset,

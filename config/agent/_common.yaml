@@ -24,6 +24,6 @@ observability:
   mlflow:
     enabled: true
     experiment_name: tech-market-researcher
-  arize:
+  phoenix:
     enabled: true
     project_name: "tech-market-researcher"

@@ -14,7 +14,7 @@ EVALS_RUN_NAME_PREFIX = "evals-"
 class EvalsPlatform(str, Enum):
     """Supported evaluation platforms."""
 
-    ARIZE = "arize"
+    PHOENIX = "phoenix"
     MLLFLOW = "mlflow"
 
 

@@ -10,7 +10,7 @@ flowchart LR
 
     subgraph evals["Evaluations"]
         mlflow_evals["MLflow evaluations"]
-        arize_evals["Arize evaluations"]
+        phoenix_evals["Phoenix evaluations"]
     end
 
     subgraph docker["Docker (docker compose)"]
@@ -25,11 +25,11 @@ flowchart LR
         valkey["searxng_valkey<br/>Valkey (rate limiting)"]
         minio["minio<br/>S3 storage (MLflow artifacts)"]
         pgadmin["pgadmin<br/>Postgres web UI"]
-        subgraph arize_box["arize_server — Arize"]
-            arize_server["Observability<br/>& traces"]
-            arize_datasets["Datasets<br/>& experiments"]
+        subgraph phoenix_box["phoenix_server — Phoenix"]
+            phoenix_server["Observability<br/>& traces"]
+            phoenix_datasets["Datasets<br/>& experiments"]
         end
-        arize_db["arize_db<br/>Postgres 17"]
+        phoenix_db["phoenix_db<br/>Postgres 17"]
     end
 
     macbook["MacBook (M5 Pro)<br/>OMLX server<br/>e.g. Qwen3.8-27B-oQ4e-mtp"]
@@ -40,7 +40,7 @@ flowchart LR
 
     main -->|LLM requests| gateway
     main -->|trace logging| traces
-    main -->|trace logging| arize_server
+    main -->|trace logging| phoenix_server
     main -->|search tool| searxng
     main -->|search tool - alternative| tavily
     main -->|fetch_page tool| web
@@ -48,12 +48,12 @@ flowchart LR
     mlflow_evals -->|judge requests| gateway
     mlflow_evals -->|reads datasets| datasets
     mlflow_evals -->|evaluation runs| eval_runs
-    arize_evals -->|runs the agent| main
-    arize_evals -->|judge requests| gateway
-    arize_evals -->|reads datasets| arize_datasets
-    arize_evals -->|experiments| arize_datasets
-    arize_server -->|stores datasets & experiments| arize_datasets
-    arize_server -->|providers call LLMs via gateway| gateway
+    phoenix_evals -->|runs the agent| main
+    phoenix_evals -->|judge requests| gateway
+    phoenix_evals -->|reads datasets| phoenix_datasets
+    phoenix_evals -->|experiments| phoenix_datasets
+    phoenix_server -->|stores datasets & experiments| phoenix_datasets
+    phoenix_server -->|providers call LLMs via gateway| gateway
     gateway -->|local model| macbook
     gateway -->|cloud model| aws
     searxng -->|queries| engines
@@ -61,15 +61,15 @@ flowchart LR
     mlflow_box -->|backend store| mlflow_db
     mlflow_box -->|artifacts| minio
     pgadmin -->|manages| mlflow_db
-    arize_server -->|backend store| arize_db
-    pgadmin -->|manages| arize_db
+    phoenix_server -->|backend store| phoenix_db
+    pgadmin -->|manages| phoenix_db
 ```
 
 - **Agent** — an agent built on [LangChain](https://www.langchain.com) [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent). LLM requests go through the [MLflow](https://mlflow.org) AI Gateway; every run is traced back to MLflow.
-- **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Arize** (datasets and results are stored as a Phoenix experiment in Arize).
+- **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Phoenix** (datasets and results are stored as a Phoenix experiment in Phoenix).
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces. It also monitors token usage and cost in real time, and supports budgets that cap spending, so a runaway agent run can't keep consuming tokens and money indefinitely.
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
-- **Supporting containers** — [Postgres](https://www.postgresql.org) (MLflow's backend store), [Arize](https://arize.com) (LLM/agent observability) with its own Postgres store, [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI).
+- **Supporting containers** — [Postgres](https://www.postgresql.org) (MLflow's backend store), [Arize Phoenix](https://arize.com) (LLM/agent observability) with its own Postgres store, [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI).
 
 ## Bootstrapping
 
@@ -85,14 +85,14 @@ flowchart LR
             datasets["Datasets"]
         end
         minio["minio<br/>S3 storage (MLflow artifacts)"]
-        arize_server["arize_server<br/>Arize (LLM observability)"]
+        phoenix_server["phoenix_server<br/>Phoenix (LLM observability)"]
     end
 
     bs -->|creates buckets| minio
     bs -->|configures gateways and models| gateway
     bs -->|creates experiments and loads datasets| datasets
-    bs -->|loads datasets| arize_server
-    bs -->|configures LLM providers and models| arize_server
+    bs -->|loads datasets| phoenix_server
+    bs -->|configures LLM providers and models| phoenix_server
 ```
 
 The script runs in this order:
@@ -100,7 +100,7 @@ The script runs in this order:
 1. **MinIO** — creates the S3 buckets (the gateway's artifact root is `s3://mlflow-artifacts`, so the bucket must exist first).
 2. **MLflow AI Gateway** — registers gateways and models.
 3. **MLflow** — creates experiments and loads the (filtered) datasets.
-4. **Arize** — loads datasets, then configures its custom LLM providers and models to point at the MLflow AI Gateway (so this must come after the gateway is set up).
+4. **Phoenix** — loads datasets, then configures its custom LLM providers and models to point at the MLflow AI Gateway (so this must come after the gateway is set up).
 
 ## Evaluations
 
@@ -110,23 +110,23 @@ flowchart LR
     jinja["Jinja rendering<br/>(prompt templates)"]
     loader["Loader<br/>filtering"]
     mlflow_ds["MLflow<br/>datasets"]
-    arize_ds["Arize<br/>datasets"]
+    phoenix_ds["Phoenix<br/>datasets"]
     evals["Evals script"]
 
     repo --> jinja
     jinja --> loader
     loader -->|loads| mlflow_ds
-    loader -->|loads| arize_ds
+    loader -->|loads| phoenix_ds
     mlflow_ds -->|loads dataset| evals
-    arize_ds -->|loads dataset| evals
+    phoenix_ds -->|loads dataset| evals
 ```
 
 Evaluation flow, step by step:
 
 - **Datasets** — stored in the git repo as the source of truth.
 - **Jinja logic** — dataset records can use Jinja templating to render prompts before they are sent to the agent.
-- **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Arize. It can load multiple datasets and merge them into a single MLflow or Arize dataset.
-- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow or Arize depending on the selected platform.
+- **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Phoenix. It can load multiple datasets and merge them into a single MLflow or Phoenix dataset.
+- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow or Phoenix depending on the selected platform.
 
 ### Scorer applicability (MLflow)
 
@@ -154,11 +154,11 @@ Applicability criterion per scorer (MLflow built-in names):
 | `tool_call_correctness` | Always applicable. |
 | `tool_call_efficiency` | Always applicable. |
 
-### Evaluator applicability (Arize)
+### Evaluator applicability (Phoenix)
 
-The same problem exists on the Arize platform: an evaluator is not always meaningful for every record. Phoenix differs from MLflow in that every logged evaluation counts toward the experiment mean and there is no `not_applicable` value to exclude from aggregation. The mechanism is therefore the inverse: a record the evaluator cannot judge must log **no evaluation at all**, so the mean covers applicable records only.
+The same problem exists on the Phoenix platform: an evaluator is not always meaningful for every record. Phoenix differs from MLflow in that every logged evaluation counts toward the experiment mean and there is no `not_applicable` value to exclude from aggregation. The mechanism is therefore the inverse: a record the evaluator cannot judge must log **no evaluation at all**, so the mean covers applicable records only.
 
-Each evaluator is therefore built with an **applicability criterion** (in `src/evaluations/arize/evaluators.py`), evaluated per record against the example fields the evaluators read; the criterion is met when the corresponding field is present and non-empty. Arize criteria are static field checks (the example fields are known ahead of the run); unlike MLflow, no judge decides applicability.
+Each evaluator is therefore built with an **applicability criterion** (in `src/evaluations/phoenix/evaluators.py`), evaluated per record against the example fields the evaluators read; the criterion is met when the corresponding field is present and non-empty. Phoenix criteria are static field checks (the example fields are known ahead of the run); unlike MLflow, no judge decides applicability.
 
 Field convention: expectations (`expected_response`, `expected_facts`, `expected_tool_calls`) live in the example's `output` field — the example's reference answer, which Phoenix passes to evaluators as `expected` — while supplementary annotations (`guidelines`, `tags`, `source_documents`) live in the example's free-form `metadata` field. The criteria below refer to those fields.
 
@@ -232,7 +232,7 @@ flowchart TB
                 subgraph docker["Docker (docker compose)"]
                     gateway["AI Gateway<br/>/gateway/mlflow/v1"]
                     mlflow_ui["MLflow UI"]
-                    arize_server["Arize"]
+                    phoenix_server["Phoenix"]
                 end
                 main["Tech Market Researcher Agent<br/>(main / supervisor)"]
                 subgraph cli["CLI"]
@@ -251,11 +251,11 @@ flowchart TB
     vscode -->|SSH| cli
     vscode -->|Remote-SSH extension| code
     browser -->|VS Code exposes VM ports on 0.0.0.0| mlflow_ui
-    browser -->|VS Code exposes VM ports on 0.0.0.0| arize_server
+    browser -->|VS Code exposes VM ports on 0.0.0.0| phoenix_server
     ts_ph -->|"one way connections"| ts_vm
     browser_ph --> ts_ph
     ts_vm --> mlflow_ui
-    ts_vm --> arize_server
+    ts_vm --> phoenix_server
     pi -->|LLM requests| omix
     cli -->|runs| main
     main --> gateway
@@ -264,7 +264,7 @@ flowchart TB
 ```
 
 - **Newer MacBook (M5 Pro)** — dedicated to serving models through [OMLX](https://omlx.ai/), reachable over the local network. Its wired memory limit is raised as high as possible and no other applications run on it, so it is used for model serving only.
-- **Older MacBook (host)** — runs VS Code on the host, which opens a remote CLI in the Ubuntu VM over SSH and edits the code in the VM directly using the Remote-SSH extension. A browser on the host is used to view the MLflow and Arize UIs; VS Code exposes the VM's service ports on 0.0.0.0 on the host. [VMware](https://www.vmware.com/) hosts the Ubuntu VM on this machine.
+- **Older MacBook (host)** — runs VS Code on the host, which opens a remote CLI in the Ubuntu VM over SSH and edits the code in the VM directly using the Remote-SSH extension. A browser on the host is used to view the MLflow and Phoenix UIs; VS Code exposes the VM's service ports on 0.0.0.0 on the host. [VMware](https://www.vmware.com/) hosts the Ubuntu VM on this machine.
 - **Ubuntu VM** — stores the code (the git repo) and runs all the scripts, the Docker services, and the [Pi](https://pi.dev) agentic harness. The Tech Market Researcher Agent is run from the CLI. It is deliberately a sandbox: it holds no secrets other than the ones this project needs and no personal user data.
 - **Models** — Pi talks directly to the OMLX server; the DeepAgents agent goes through the MLflow AI Gateway, which routes to the OMLX server (default) or to [AWS Bedrock](https://aws.amazon.com/bedrock/). The gateway uses a long-term Bedrock API key to access Bedrock, which grants access to specific models only (Amazon Nova) and can be activated or deactivated at will.
-- **Mobile phone** — [Tailscale](https://tailscale.com/) is a software-defined mesh VPN, running on both the Ubuntu VM and the phone. It is configured with one-way access from the phone to the VM (the VM is sandboxed), so the browser on the phone can reach any UI running on the VM, for example: the MLflow UI and Arize.
+- **Mobile phone** — [Tailscale](https://tailscale.com/) is a software-defined mesh VPN, running on both the Ubuntu VM and the phone. It is configured with one-way access from the phone to the VM (the VM is sandboxed), so the browser on the phone can reach any UI running on the VM, for example: the MLflow UI and Phoenix.

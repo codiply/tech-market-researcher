@@ -33,21 +33,21 @@ shift
 #   minio      -> uid 100 (minio user in the alpine/minio mirror image;
 #                 note: the official minio/minio image uses uid 1001)
 #   mlflow_db  -> uid 999  (postgres user)
-#   arize_db   -> uid 999  (postgres user)
+#   phoenix_db   -> uid 999  (postgres user)
 #   pgadmin    -> uid 5050 (pgadmin user in the dpage/pgadmin4 image; gid 0)
 #   searxng_*  -> uid 977  (searxng user in the searxng/searxng image)
 #   searxng_valkey runs as root, so only the mkdir is needed (no chown)
 ensure_storage_dirs() {
-  local -A owners=( [minio]=100 [mlflow_db]=999 [arize_db]=999 [pgadmin]=5050 [searxng_config]=977 [searxng_cache]=977 [searxng_valkey]=0 )
-  local -A groups=( [minio]=101 [mlflow_db]=999 [arize_db]=999 [pgadmin]=0 [searxng_config]=977 [searxng_cache]=977 [searxng_valkey]=0 )
+  local -A owners=( [minio]=100 [mlflow_db]=999 [phoenix_db]=999 [pgadmin]=5050 [searxng_config]=977 [searxng_cache]=977 [searxng_valkey]=0 )
+  local -A groups=( [minio]=101 [mlflow_db]=999 [phoenix_db]=999 [pgadmin]=0 [searxng_config]=977 [searxng_cache]=977 [searxng_valkey]=0 )
   local dir path uid
-  for dir in minio mlflow_db arize_db pgadmin searxng_config searxng_cache searxng_valkey; do
-    path="$ROOT/storage/$dir"
+  for dir in minio mlflow_db phoenix_db pgadmin searxng_config searxng_cache searxng_valkey; do
+    path="$ROOT/.storage/$dir"
     uid="${owners[$dir]}"
     mkdir -p "$path"
     [[ "$uid" == "0" ]] && continue
     if [[ "$(stat -c '%u' "$path")" != "$uid" ]]; then
-      echo "storage/$dir is owned by uid $(stat -c '%u' "$path"); chowning to $uid:${groups[$dir]}..."
+      echo ".storage/$dir is owned by uid $(stat -c '%u' "$path"); chowning to $uid:${groups[$dir]}..."
       if [[ "$(id -u)" == "0" ]]; then
         chown "$uid:${groups[$dir]}" "$path"
       else
@@ -80,12 +80,12 @@ except Exception:
   return 1
 }
 
-# Wait for Arize to be ready. A plain HTTP 200 is not enough: Arize serves
+# Wait for Phoenix to be ready. A plain HTTP 200 is not enough: Phoenix serves
 # its SPA (and thus returns 200) for any path, even before the backend is
 # ready. So probe the GraphQL API instead, which returns data only once the
 # backend and database are serving.
-wait_for_arize() {
-  echo "Waiting for Arize server on localhost:6006..."
+wait_for_phoenix() {
+  echo "Waiting for Phoenix server on localhost:6006..."
   local tries
   for tries in $(seq 1 90); do
     if uv --directory "$ROOT" run python -c '
@@ -102,21 +102,21 @@ except Exception:
     sys.exit(1)
 sys.exit(0 if body.get("data") is not None and not body.get("errors") else 1)
 ' 2>/dev/null; then
-      echo "Arize server is up."
+      echo "Phoenix server is up."
       return 0
     fi
     sleep 2
   done
-  echo "error: Arize server did not come up within 180s" >&2
+  echo "error: Phoenix server did not come up within 180s" >&2
   return 1
 }
 
-# Bootstrap the stack (idempotent): S3, MLflow, and Arize resources.
+# Bootstrap the stack (idempotent): S3, MLflow, and Phoenix resources.
 # MLFLOW_TRACKING_USERNAME attributes dataset records to the automation instead of the local user.
 # (read_mlflow_creds() only looks at MLFLOW_TRACKING_USERNAME, not MLFLOW_USER.)
 bootstrap() {
   wait_for_mlflow || return 1
-  wait_for_arize || return 1
+  wait_for_phoenix || return 1
   MLFLOW_TRACKING_USERNAME=bootstrap uv --directory "$ROOT" run bootstrap
 }
 

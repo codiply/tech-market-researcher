@@ -1,12 +1,12 @@
-"""Pydantic model for Arize (Phoenix) dataset examples."""
+"""Pydantic model for Phoenix dataset examples."""
 
 from pydantic import BaseModel
 
 from bootstrapping.datasets.model import DatasetRecord
 
 
-class ArizeExample(BaseModel):
-    """One example in an Arize (Phoenix) dataset, as sent by the upload API."""
+class PhoenixExample(BaseModel):
+    """One example in a Phoenix dataset, as sent by the upload API."""
 
     example_id: str
     input: dict[str, object]
@@ -14,7 +14,7 @@ class ArizeExample(BaseModel):
     metadata: dict[str, object] = {}
 
     @staticmethod
-    def to_payload(name: str, examples: list[ArizeExample]) -> dict:
+    def to_payload(name: str, examples: list[PhoenixExample]) -> dict:
         """Build the /v1/datasets/upload payload for the given examples."""
         return {
             "name": name,
@@ -25,12 +25,12 @@ class ArizeExample(BaseModel):
         }
 
 
-def to_arize_example(record: DatasetRecord) -> ArizeExample:
-    """Map a local dataset record to its Arize representation.
+def to_phoenix_example(record: DatasetRecord) -> PhoenixExample:
+    """Map a local dataset record to its Phoenix representation.
 
     Guidelines and tags go to example metadata; the expectations go to the example output
     (the record's expected/reference output). The evaluations read both places back:
-    see the field convention documented in evaluations/arize/evaluators.py.
+    see the field convention documented in evaluations/phoenix/evaluators.py.
     """
     metadata: dict[str, object] = {}
     if record.guidelines:
@@ -46,7 +46,7 @@ def to_arize_example(record: DatasetRecord) -> ArizeExample:
         output["expected_facts"] = record.expected_facts
     if record.expected_tool_calls:
         output["expected_tool_calls"] = [call.model_dump(exclude_none=True) for call in record.expected_tool_calls]
-    return ArizeExample(
+    return PhoenixExample(
         example_id=record.unique_id,
         input=record.input.model_dump(),
         output=output,

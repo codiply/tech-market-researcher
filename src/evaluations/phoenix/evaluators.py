@@ -1,4 +1,4 @@
-"""Builds the list of Arize evaluators from the evaluation config."""
+"""Builds the list of Phoenix evaluators from the evaluation config."""
 
 import asyncio
 import os
@@ -27,15 +27,15 @@ from phoenix.evals.metrics import (
 )
 from pydantic import BaseModel, Field
 
-from evaluations.arize.configuration import ArizeEvaluationConfig, BaseEvaluatorConfig
 from evaluations.common.fields import get_field, get_field_list
+from evaluations.phoenix.configuration import BaseEvaluatorConfig, PhoenixEvaluationConfig
 
 # The judge talks to the OpenAI-compatible MLflow AI Gateway endpoint. Its base URL is derived
 # from the tracking server URI (see the agent's model_providers in config/agent/_common.yaml).
 GATEWAY_BASE_PATH = "/gateway/mlflow/v1"
 
-# The dataset example fields the evaluators read from, kept in sync with to_arize_example in
-# bootstrapping/datasets/arize.py (which uploads the full record; fields no evaluator reads
+# The dataset example fields the evaluators read from, kept in sync with to_phoenix_example in
+# bootstrapping/datasets/phoenix.py (which uploads the full record; fields no evaluator reads
 # are inert on this platform):
 #   example output:   expected_response, expected_facts
 #   example metadata: guidelines, tags, source_documents
@@ -94,7 +94,7 @@ def _gateway_base_url() -> str:
     return os.environ["MLFLOW_SERVER_URI"].rstrip("/") + GATEWAY_BASE_PATH
 
 
-def _judge_llm(config: ArizeEvaluationConfig, evaluator_config: BaseEvaluatorConfig) -> LLM:
+def _judge_llm(config: PhoenixEvaluationConfig, evaluator_config: BaseEvaluatorConfig) -> LLM:
     """Return the judge LLM for an evaluator, honoring any per-evaluator model override."""
     return JudgeLLM(
         provider="openai",
@@ -145,7 +145,7 @@ def _expected_facts(expected: Mapping[str, Any] | None = None) -> str:
     return "\n".join(f"- {fact}" for fact in get_field_list(expected, "expected_facts"))
 
 
-# Evaluator applicability (the Arize mirror of the MLflow scorer applicability): a built-in
+# Evaluator applicability (the Phoenix mirror of the MLflow scorer applicability): a built-in
 # evaluator is not always meaningful for every record (e.g. exact_match with no expected
 # response, or a retrieval evaluator for a record that carries no source documents). Each
 # evaluator has an applicability criterion, evaluated per record against the example fields
@@ -212,7 +212,7 @@ class ExactMatchEvaluator(Evaluator):
         return [Score(name=self.name, score=1.0 if eval_input["output"] == eval_input["expected"] else 0.0)]
 
 
-# Custom judge evaluators (not part of Phoenix's built-ins): the Arize mirror of the MLflow
+# Custom judge evaluators (not part of Phoenix's built-ins): the Phoenix mirror of the MLflow
 # scorers that consume a record's expectations, which none of the built-in LLM evaluators do.
 EXPECTED_FACTS_PROMPT = """You are an expert evaluator checking whether the response covers every expected fact.
 
@@ -266,7 +266,7 @@ Does the response follow every provided guideline (followed), or does it violate
 
 
 def _custom_evaluator(
-    config: ArizeEvaluationConfig,
+    config: PhoenixEvaluationConfig,
     name: str,
     prompt: str,
     choices: dict,
@@ -282,7 +282,7 @@ def _custom_evaluator(
     )
 
 
-EvaluatorBuilder = Callable[[ArizeEvaluationConfig], list[ClientEvaluator]]
+EvaluatorBuilder = Callable[[PhoenixEvaluationConfig], list[ClientEvaluator]]
 
 
 def _bind(
@@ -321,7 +321,7 @@ def _bind(
     return create_evaluator(kind=kind, name=evaluator.name)(eval_record)
 
 
-def _build_completeness_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_completeness_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `completeness` evaluator(s), if enabled."""
     if not config.evaluators.completeness.enabled:
         return []
@@ -329,7 +329,7 @@ def _build_completeness_evaluators(config: ArizeEvaluationConfig) -> list[Client
     return [_bind(evaluator, {"conversation": _conversation})]
 
 
-def _build_conciseness_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_conciseness_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `conciseness` evaluator(s), if enabled."""
     if not config.evaluators.conciseness.enabled:
         return []
@@ -337,7 +337,7 @@ def _build_conciseness_evaluators(config: ArizeEvaluationConfig) -> list[ClientE
     return [_bind(evaluator, {"input": _user_message})]
 
 
-def _build_correctness_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_correctness_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `correctness` evaluator(s), if enabled."""
     if not config.evaluators.correctness.enabled:
         return []
@@ -345,7 +345,7 @@ def _build_correctness_evaluators(config: ArizeEvaluationConfig) -> list[ClientE
     return [_bind(evaluator, {"input": _user_message}, _any_expected_field("expected_response", "expected_facts"))]
 
 
-def _build_expected_facts_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_expected_facts_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the custom `expected_facts` evaluator(s), if enabled."""
     if not config.evaluators.expected_facts.enabled:
         return []
@@ -365,14 +365,14 @@ def _build_expected_facts_evaluators(config: ArizeEvaluationConfig) -> list[Clie
     ]
 
 
-def _build_exact_match_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_exact_match_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `exact_match` code evaluator(s), if enabled. No judge LLM is needed."""
     if not config.evaluators.exact_match.enabled:
         return []
     return [_bind(ExactMatchEvaluator(), {"expected": _expected_response}, _any_expected_field("expected_response"))]
 
 
-def _build_faithfulness_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_faithfulness_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `faithfulness` evaluator(s), if enabled."""
     if not config.evaluators.faithfulness.enabled:
         return []
@@ -384,7 +384,7 @@ def _build_faithfulness_evaluators(config: ArizeEvaluationConfig) -> list[Client
     ]
 
 
-def _build_guidelines_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_guidelines_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the custom `guidelines` evaluator(s), if enabled."""
     if not config.evaluators.guidelines.enabled:
         return []
@@ -398,7 +398,7 @@ def _build_guidelines_evaluators(config: ArizeEvaluationConfig) -> list[ClientEv
     return [_bind(evaluator, {"input": _user_message, "guidelines": _guidelines}, _any_metadata_field("guidelines"))]
 
 
-def _build_hallucination_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_hallucination_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `hallucination` evaluator(s), if enabled."""
     if not config.evaluators.hallucination.enabled:
         return []
@@ -408,7 +408,7 @@ def _build_hallucination_evaluators(config: ArizeEvaluationConfig) -> list[Clien
     return [_bind(evaluator, {"input": _record_transcript})]
 
 
-def _build_matches_regex_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_matches_regex_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `matches_regex` code evaluator(s), if enabled. No judge LLM is needed."""
     evaluator_config = config.evaluators.matches_regex
     if not evaluator_config.enabled:
@@ -418,7 +418,7 @@ def _build_matches_regex_evaluators(config: ArizeEvaluationConfig) -> list[Clien
     return [cast("ClientEvaluator", MatchesRegex(pattern=evaluator_config.pattern))]
 
 
-def _build_pii_detection_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_pii_detection_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `pii_detection` evaluator(s), if enabled."""
     if not config.evaluators.pii_detection.enabled:
         return []
@@ -426,7 +426,7 @@ def _build_pii_detection_evaluators(config: ArizeEvaluationConfig) -> list[Clien
     return [_bind(evaluator, {"conversation": _conversation})]
 
 
-def _build_refusal_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_refusal_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `refusal` evaluator(s), if enabled."""
     if not config.evaluators.refusal.enabled:
         return []
@@ -434,7 +434,7 @@ def _build_refusal_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvalu
     return [_bind(evaluator, {"input": _user_message})]
 
 
-def _build_toxicity_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_toxicity_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `toxicity` evaluator(s), if enabled."""
     if not config.evaluators.toxicity.enabled:
         return []
@@ -442,7 +442,7 @@ def _build_toxicity_evaluators(config: ArizeEvaluationConfig) -> list[ClientEval
     return [_bind(evaluator, {"text": "output"})]
 
 
-def _build_user_friction_evaluators(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def _build_user_friction_evaluators(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the `user_friction` evaluator(s), if enabled."""
     if not config.evaluators.user_friction.enabled:
         return []
@@ -492,7 +492,7 @@ if set(_EVALUATOR_BUILDERS) != set(EvaluatorType):
     raise ValueError("_EVALUATOR_BUILDERS must have exactly one builder per EvaluatorType.")
 
 
-def build_evaluators_list(config: ArizeEvaluationConfig) -> list[ClientEvaluator]:
+def build_evaluators_list(config: PhoenixEvaluationConfig) -> list[ClientEvaluator]:
     """Build the evaluators enabled in the config; the judge goes through the AI Gateway."""
     evaluators: list[ClientEvaluator] = []
     for evaluator_type in EvaluatorType:

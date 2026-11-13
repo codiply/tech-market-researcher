@@ -9,7 +9,7 @@ from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
 from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH, DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR
 
-CONFIG_DIR = Path("config") / "evaluations" / "arize"
+CONFIG_DIR = Path("config") / "evaluations" / "phoenix"
 
 
 class BaseEvaluatorConfig(BasePydanticModel):
@@ -45,7 +45,7 @@ class EvaluatorsConfig(BasePydanticModel):
 
 
 class HarnessConfig(BasePydanticModel):
-    """Concurrency settings for the Arize evaluation run.
+    """Concurrency settings for the Phoenix evaluation run.
 
     ``max_concurrent`` is passed as the `concurrency` parameter of the Phoenix async
     experiment runner, which bounds the tasks and evaluations in flight.
@@ -56,7 +56,7 @@ class HarnessConfig(BasePydanticModel):
     max_concurrent: int | None = Field(default=None, ge=0)
 
 
-class ArizeEvaluationConfig(BasePydanticModel):
+class PhoenixEvaluationConfig(BasePydanticModel):
     """Evaluation settings. The judge runs against an endpoint of the MLflow AI Gateway."""
 
     dataset_name: str
@@ -75,9 +75,9 @@ def get_config_loader() -> ConfigLoader:
     if _CONFIG_LOADER is None:
         debug_dir_path: Path | None = None
         if os.environ.get(DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR, "").lower() in {"true", "1"}:
-            debug_dir_path = BASE_DEBUG_DIR_PATH / "config" / "evaluations" / "arize"
+            debug_dir_path = BASE_DEBUG_DIR_PATH / "config" / "evaluations" / "phoenix"
         _CONFIG_LOADER = ConfigLoader(
-            ArizeEvaluationConfig,
+            PhoenixEvaluationConfig,
             CONFIG_DIR,
             ConfigLoaderParams(debug_dir_path=debug_dir_path),
         )
@@ -87,6 +87,6 @@ def get_config_loader() -> ConfigLoader:
 # pylint: enable=duplicate-code
 
 
-def load_config(name: str) -> ArizeEvaluationConfig:
-    """Load the evaluation config at config/evaluations/arize/<name>.yaml."""
+def load_config(name: str) -> PhoenixEvaluationConfig:
+    """Load the evaluation config at config/evaluations/phoenix/<name>.yaml."""
     return get_config_loader().load(name)

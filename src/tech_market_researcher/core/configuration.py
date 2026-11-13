@@ -111,24 +111,24 @@ class MlflowObservabilityConfig(BasePydanticModel):
         return self
 
 
-class ArizeObservabilityConfig(BasePydanticModel):
-    """Arize observability settings. Omit the section (or set enabled: false) to disable."""
+class PhoenixObservabilityConfig(BasePydanticModel):
+    """Phoenix observability settings. Omit the section (or set enabled: false) to disable."""
 
     enabled: bool = False
     project_name: str = ""
 
     @model_validator(mode="after")
-    def _check_project_name(self) -> "ArizeObservabilityConfig":
+    def _check_project_name(self) -> "PhoenixObservabilityConfig":
         if self.enabled and not self.project_name:
             raise ValueError("project_name is required when enabled is true.")
         return self
 
 
 class ObservabilityConfig(BasePydanticModel):
-    """Observability settings. Omit the section to disable both MLflow and Arize."""
+    """Observability settings. Omit the section to disable both MLflow and Phoenix."""
 
     mlflow: MlflowObservabilityConfig = Field(default_factory=MlflowObservabilityConfig)
-    arize: ArizeObservabilityConfig = Field(default_factory=ArizeObservabilityConfig)
+    phoenix: PhoenixObservabilityConfig = Field(default_factory=PhoenixObservabilityConfig)
 
 
 def resolve_model_connection_details(

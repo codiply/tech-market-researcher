@@ -1,11 +1,16 @@
-"""Arize (Phoenix) custom LLM provider and model bootstrapping via the Phoenix GraphQL API."""
+"""Phoenix custom LLM provider and model bootstrapping via the Phoenix GraphQL API."""
 
 import logging
 import os
 
 import httpx
 
-from bootstrapping.common.configuration import ArizeAIProviderConfig, ArizeModelConfig, ArizeModelCosts, BootstrapConfig
+from bootstrapping.common.configuration import (
+    BootstrapConfig,
+    PhoenixAIProviderConfig,
+    PhoenixModelConfig,
+    PhoenixModelCosts,
+)
 from bootstrapping.common.exceptions import BootstrapError
 
 logger = logging.getLogger(__name__)
@@ -51,7 +56,7 @@ mutation UpdateModel($input: UpdateModelMutationInput!) {
 """
 
 
-def _token_prices(costs: ArizeModelCosts) -> list[dict]:
+def _token_prices(costs: PhoenixModelCosts) -> list[dict]:
     """Phoenix token price entries: input and output are required, other kinds only when set."""
     prices: list[dict] = []
     for token_type, kind, price in (
@@ -106,7 +111,7 @@ def _find_model(client: httpx.Client, name: str) -> dict | None:
     return next((model for model in models if model["name"] == name), None)
 
 
-def _client_config(provider: ArizeAIProviderConfig) -> dict:
+def _client_config(provider: PhoenixAIProviderConfig) -> dict:
     """Phoenix clientConfig payload for the provider's SDK."""
     settings = provider.sdk_specific_settings
     client_kwargs: dict = {"openaiAuthenticationMethod": {"apiKey": settings.api_key.get_secret_value()}}
@@ -116,7 +121,7 @@ def _client_config(provider: ArizeAIProviderConfig) -> dict:
     return {"openai": client_kwargs}
 
 
-def _provider_input(provider: ArizeAIProviderConfig) -> dict:
+def _provider_input(provider: PhoenixAIProviderConfig) -> dict:
     """Phoenix create/patch input for the provider (id must be added for patches)."""
     return {
         "name": provider.provider_name,
@@ -126,7 +131,7 @@ def _provider_input(provider: ArizeAIProviderConfig) -> dict:
     }
 
 
-def _ensure_provider(client: httpx.Client, provider: ArizeAIProviderConfig) -> None:
+def _ensure_provider(client: httpx.Client, provider: PhoenixAIProviderConfig) -> None:
     """Create or update the provider so it matches the config.
 
     The client config is stored encrypted and never returned, so it cannot be
@@ -139,21 +144,21 @@ def _ensure_provider(client: httpx.Client, provider: ArizeAIProviderConfig) -> N
             client,
             CREATE_PROVIDER,
             {"input": _provider_input(provider)},
-            context=f"create provider '{provider.provider_name}' in Arize",
+            context=f"create provider '{provider.provider_name}' in Phoenix",
         )
-        logger.info("Created provider '%s' in Arize.", provider.provider_name)
+        logger.info("Created provider '%s' in Phoenix.", provider.provider_name)
         return
     input_ = {"id": existing["id"], **_provider_input(provider)}
     _graphql_request(
         client,
         PATCH_PROVIDER,
         {"input": input_},
-        context=f"update provider '{provider.provider_name}' in Arize",
+        context=f"update provider '{provider.provider_name}' in Phoenix",
     )
-    logger.info("Updated provider '%s' in Arize.", provider.provider_name)
+    logger.info("Updated provider '%s' in Phoenix.", provider.provider_name)
 
 
-def _model_input(model: ArizeModelConfig) -> dict:
+def _model_input(model: PhoenixModelConfig) -> dict:
     """Phoenix create/update input for the model (id must be added for updates)."""
     return {
         "name": model.model_name,
@@ -163,7 +168,7 @@ def _model_input(model: ArizeModelConfig) -> dict:
     }
 
 
-def _ensure_model(client: httpx.Client, model: ArizeModelConfig) -> None:
+def _ensure_model(client: httpx.Client, model: PhoenixModelConfig) -> None:
     """Create or update the generative model so it matches the config.
 
     Updates also cover provider renames: model names are unique in Phoenix, so
@@ -175,35 +180,35 @@ def _ensure_model(client: httpx.Client, model: ArizeModelConfig) -> None:
             client,
             CREATE_MODEL,
             {"input": _model_input(model)},
-            context=f"create model '{model.model_name}' in Arize",
+            context=f"create model '{model.model_name}' in Phoenix",
         )
-        logger.info("Created model '%s' in Arize.", model.model_name)
+        logger.info("Created model '%s' in Phoenix.", model.model_name)
         return
     if (
         existing["namePattern"] == model.name_pattern
         and (existing["provider"] or "") == (model.provider or "")
         and _same_prices(existing["tokenPrices"], _token_prices(model.costs))
     ):
-        logger.info("Model '%s' is up to date in Arize - skipping.", model.model_name)
+        logger.info("Model '%s' is up to date in Phoenix - skipping.", model.model_name)
         return
     input_ = {"id": existing["id"], **_model_input(model)}
     _graphql_request(
         client,
         UPDATE_MODEL,
         {"input": input_},
-        context=f"update model '{model.model_name}' in Arize",
+        context=f"update model '{model.model_name}' in Phoenix",
     )
-    logger.info("Updated model '%s' in Arize (pattern: %s).", model.model_name, model.name_pattern)
+    logger.info("Updated model '%s' in Phoenix (pattern: %s).", model.model_name, model.name_pattern)
 
 
-def bootstrap_arize_settings(config: BootstrapConfig) -> None:
-    """Provision Arize (Phoenix) custom LLM providers and models from the config.
+def bootstrap_phoenix_settings(config: BootstrapConfig) -> None:
+    """Provision Phoenix custom LLM providers and models from the config.
 
     Providers are created first: models reference their provider by name.
     """
-    base_url = os.environ["ARIZE_SERVER_URI"].rstrip("/")
+    base_url = os.environ["PHOENIX_SERVER_URI"].rstrip("/")
     with httpx.Client(base_url=base_url, timeout=60.0) as client:
-        for provider in config.arize.ai_providers:
+        for provider in config.phoenix.ai_providers:
             _ensure_provider(client, provider)
-        for model in config.arize.models:
+        for model in config.phoenix.models:
             _ensure_model(client, model)

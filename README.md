@@ -12,7 +12,7 @@ See [design.md](documentation/design.md) for the design and architecture diagram
 ./stack.sh up -d
 ```
 
-This also runs the bootstrap, which provisions the stack's resources (S3, MLflow, Arize) from `config/`. It is idempotent; re-run it any time with `./stack.sh bootstrap` (e.g. after updating the bootstrap config). Note that gateway endpoints and their API keys are written into the AI Gateway during the bootstrap, so if you change an endpoint URL or a secret in `.env` you must re-run the bootstrap for the gateway to pick it up.
+This also runs the bootstrap, which provisions the stack's resources (S3, MLflow, Phoenix) from `config/`. It is idempotent; re-run it any time with `./stack.sh bootstrap` (e.g. after updating the bootstrap config). Note that gateway endpoints and their API keys are written into the AI Gateway during the bootstrap, so if you change an endpoint URL or a secret in `.env` you must re-run the bootstrap for the gateway to pick it up.
 
 The stack exposes:
 
@@ -21,11 +21,11 @@ The stack exposes:
 | [MLflow](https://mlflow.org) (UI) | [http://0.0.0.0:5000](http://0.0.0.0:5000) | experiments, models, AI Gateway |
 | [SearXNG](https://docs.searxng.org/) (UI) | [http://0.0.0.0:8384](http://0.0.0.0:8384) | local metasearch backend for the search tool; its JSON API powers the agent, no login |
 | [MinIO](https://min.io) (UI) | [http://0.0.0.0:9001](http://0.0.0.0:9001) | log in with `minio` / `minio12345` (fixed local default; MinIO requires an 8+ char root password) |
-| [pgAdmin](https://www.pgadmin.org) (UI) | [http://0.0.0.0:5050](http://0.0.0.0:5050) | log in with `admin@example.com` / `pgadmin12345` (fixed local default, override with `PGADMIN_PASSWORD`); the MLflow and Arize databases are pre-configured with the `MLFLOW_DB_*` / `ARIZE_DB_*` credentials from `.env` |
-| [Arize](https://arize.com) (UI) | [http://0.0.0.0:6006](http://0.0.0.0:6006) | Arize: LLM/agent observability server + UI; also the OTLP HTTP collector on `6006` and gRPC collector on `4317` |
+| [pgAdmin](https://www.pgadmin.org) (UI) | [http://0.0.0.0:5050](http://0.0.0.0:5050) | log in with `admin@example.com` / `pgadmin12345` (fixed local default, override with `PGADMIN_PASSWORD`); the MLflow and Phoenix databases are pre-configured with the `MLFLOW_DB_*` / `PHOENIX_DB_*` credentials from `.env` |
+| [Arize Phoenix](https://arize.com) (UI) | [http://0.0.0.0:6006](http://0.0.0.0:6006) | LLM/agent observability server + UI; also the OTLP HTTP collector on `6006` and gRPC collector on `4317` |
 | [MinIO](https://min.io) (S3 API) | `http://0.0.0.0:9000` | S3 endpoint for MLflow artifacts (`MLFLOW_S3_ENDPOINT_URL`) |
 | MLflow database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5433` | backend store; credentials in `.env` (`MLFLOW_DB_*`) |
-| Arize database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5434` | Arize backend store; credentials in `.env` (`ARIZE_DB_*`) |
+| Phoenix database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5434` | backend store; credentials in `.env` (`PHOENIX_DB_*`) |
 
 ## Run the agent
 
@@ -41,7 +41,7 @@ Starts an interactive chat REPL against the MLflow AI Gateway configured in `.en
 uv run evals
 ```
 
-Runs the agent against an evaluation dataset; each record is scored by the configured evaluators — LLM judges served through the AI Gateway, plus platform-specific code evaluators (e.g. exact match and regex checks on Arize). The platform is selected with `--platform` (`mlflow`, default, or `arize`): with `mlflow` the results are stored as MLflow evaluation runs under the dataset's experiment, and with `arize` they are stored as a Phoenix experiment attached to the dataset. Flags: `--agent-config-name` (name of the agent config to load, default `base`), `--evals-config-name` (name of the evaluation config under `config/evaluations/<platform>/`, default `main`), and `--platform` (`mlflow` or `arize`, default `mlflow`). Requires the docker compose stack to be running and the dataset to have been bootstrapped.
+Runs the agent against an evaluation dataset; each record is scored by the configured evaluators — LLM judges served through the AI Gateway, plus platform-specific code evaluators (e.g. exact match and regex checks on Phoenix). The platform is selected with `--platform` (`mlflow`, default, or `phoenix`): with `mlflow` the results are stored as MLflow evaluation runs under the dataset's experiment, and with `phoenix` they are stored as a Phoenix experiment attached to the dataset. Flags: `--agent-config-name` (name of the agent config to load, default `base`), `--evals-config-name` (name of the evaluation config under `config/evaluations/<platform>/`, default `main`), and `--platform` (`mlflow` or `phoenix`, default `mlflow`). Requires the docker compose stack to be running and the dataset to have been bootstrapped.
 
 ## Common commands
 
@@ -111,7 +111,7 @@ chmod +x .git/hooks/pre-push
 ## Learning Resources
 
 - [LangChain Deep Agents documentation](https://docs.langchain.com/oss/python/deepagents/overview) — docs for the `deepagents` framework the agent is built on.
-- [Evaluating and Improving Agentic Applications](https://learn.deeplearning.ai/courses/evaluating-and-improving-agentic-applications) — DeepLearning.AI course on evaluating and improving agents, which uses Arize.
+- [Evaluating and Improving Agentic Applications](https://learn.deeplearning.ai/courses/evaluating-and-improving-agentic-applications) — DeepLearning.AI course on evaluating and improving agents, which uses Phoenix by Arize.
 
 ## License
 
