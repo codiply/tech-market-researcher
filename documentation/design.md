@@ -245,15 +245,24 @@ flowchart TB
                 subgraph cli["CLI"]
                     pi["Pi (agentic harness)"]
                 end
+                ts_vm["Tailscale"]
             end
         end
     end
     aws["AWS Bedrock<br/>e.g. eu.amazon.nova-2-lite-v1"]
+    subgraph phone["Mobile phone"]
+        browser_ph["Browser"]
+        ts_ph["Tailscale"]
+    end
 
     vscode -->|SSH| cli
     vscode -->|Remote-SSH extension| code
     browser -->|VS Code exposes VM ports on 0.0.0.0| mlflow_ui
     browser -->|VS Code exposes VM ports on 0.0.0.0| arize_server
+    ts_ph -->|"one way connections"| ts_vm
+    browser_ph --> ts_ph
+    ts_vm --> mlflow_ui
+    ts_vm --> arize_server
     pi -->|LLM requests| omix
     cli -->|runs| main
     main --> gateway
@@ -265,3 +274,4 @@ flowchart TB
 - **Older MacBook (host)** — runs VS Code on the host, which opens a remote CLI in the Ubuntu VM over SSH and edits the code in the VM directly using the Remote-SSH extension. A browser on the host is used to view the MLflow and Arize UIs; VS Code exposes the VM's service ports on 0.0.0.0 on the host. [VMware](https://www.vmware.com/) hosts the Ubuntu VM on this machine.
 - **Ubuntu VM** — stores the code (the git repo) and runs all the scripts, the Docker services, and the [Pi](https://pi.dev) agentic harness. The Tech Market Researcher Agent is run from the CLI. It is deliberately a sandbox: it holds no secrets other than the ones this project needs and no personal user data.
 - **Models** — Pi talks directly to the OMLX server; the DeepAgents agent goes through the MLflow AI Gateway, which routes to the OMLX server (default) or to [AWS Bedrock](https://aws.amazon.com/bedrock/). The gateway uses a long-term Bedrock API key to access Bedrock, which grants access to specific models only (Amazon Nova) and can be activated or deactivated at will.
+- **Mobile phone** — [Tailscale](https://tailscale.com/) is a software-defined mesh VPN, running on both the Ubuntu VM and the phone. It is configured with one-way access from the phone to the VM (the VM is sandboxed), so the browser on the phone can reach any UI running on the VM, for example: the MLflow UI and Arize.

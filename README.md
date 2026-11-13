@@ -4,7 +4,7 @@
 
 ## Design
 
-See [design.md](design.md) for the design and architecture diagrams.
+See [design.md](documentation/design.md) for the design and architecture diagrams.
 
 ## Start
 
