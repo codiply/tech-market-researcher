@@ -40,6 +40,28 @@ services:
       timeout: 5s
       retries: 5
 
+  # Agent database store.
+  agent_db:
+    image: postgres:17
+    container_name: agent_db
+    environment:
+      POSTGRES_USER: ${AGENT_DB_USER:?set AGENT_DB_USER in the environment}
+      POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:?set AGENT_DB_PASSWORD in the environment}
+      POSTGRES_DB: ${AGENT_DB_NAME:-agent}
+    ports:
+      # Host 5435 avoids a local Postgres (5432), mlflow_db (5433), and
+      # phoenix_db (5434); the container itself listens on Postgres' default
+      # 5432.
+      - "5435:5432"
+    volumes:
+      # Host folder, ignored by git via .storage/.gitignore
+      - ../.storage/agent_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AGENT_DB_USER:-postgres} -d ${AGENT_DB_NAME:-agent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Meta-search backend for the search tool. Official image from
   # https://docs.searxng.org/admin/installation-docker.html
   searxng:
@@ -98,18 +120,21 @@ services:
     image: tech-market-researcher/permissions-fixer:local
     container_name: permissions_fixer
     environment:
-      TARGET_DIRS: "/phoenix_db /mlflow_db /minio /pgadmin /searxng_config /searxng_cache /searxng_valkey"
+      TARGET_DIRS: "/phoenix_db /mlflow_db /agent_db /minio /pgadmin /searxng_config /searxng_cache /searxng_valkey"
       CRON_SCHEDULE: "*/1 * * * *"
     depends_on:
       mlflow_db:
         condition: service_healthy
       phoenix_db:
         condition: service_healthy
+      agent_db:
+        condition: service_healthy
       minio:
         condition: service_healthy
     volumes:
       - ../.storage/phoenix_db:/phoenix_db
       - ../.storage/mlflow_db:/mlflow_db
+      - ../.storage/agent_db:/agent_db
       - ../.storage/minio:/minio
       - ../.storage/pgadmin:/pgadmin
       - ../.storage/searxng_config:/searxng_config
@@ -158,6 +183,12 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-pgadmin12345}
+      # The config DB persists in .storage/pgadmin, so without this flag the
+      # image's entrypoint would re-import the server list only on first
+      # launch and never pick up servers added to the rendered JSON later.
+      # With "True", every start re-loads the JSON (replacing the stored
+      # list), keeping it as the source of truth.
+      PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
       # Passed through so entrypoint.sh can render the pre-configured server list.
       MLFLOW_DB_USER: ${MLFLOW_DB_USER:-mlflow}
       MLFLOW_DB_PASSWORD: ${MLFLOW_DB_PASSWORD:?set MLFLOW_DB_PASSWORD in the environment}
@@ -165,16 +196,23 @@ services:
       PHOENIX_DB_USER: ${PHOENIX_DB_USER:?set PHOENIX_DB_USER in the environment}
       PHOENIX_DB_PASSWORD: ${PHOENIX_DB_PASSWORD:?set PHOENIX_DB_PASSWORD in the environment}
       PHOENIX_DB_NAME: ${PHOENIX_DB_NAME:-phoenix}
+      AGENT_DB_USER: ${AGENT_DB_USER:?set AGENT_DB_USER in the environment}
+      AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD:?set AGENT_DB_PASSWORD in the environment}
+      AGENT_DB_NAME: ${AGENT_DB_NAME:-agent}
       # Rendered by entrypoint.sh at container start.
       PGADMIN_SERVER_JSON_FILE: /tmp/servers.json
       # Display name of the pre-configured MLflow server in the pgAdmin UI.
       PGADMIN_SERVER_NAME: "MLflow (Postgres)"
       # Display name of the pre-configured Phoenix server in the pgAdmin UI.
       PHOENIX_SERVER_NAME: "Phoenix (Postgres)"
+      # Display name of the pre-configured agent server in the pgAdmin UI.
+      AGENT_SERVER_NAME: "Agent (Postgres)"
     depends_on:
       mlflow_db:
         condition: service_healthy
       phoenix_db:
+        condition: service_healthy
+      agent_db:
         condition: service_healthy
     ports:
       - "5050:80"

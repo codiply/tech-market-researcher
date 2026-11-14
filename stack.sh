@@ -34,14 +34,15 @@ shift
 #                 note: the official minio/minio image uses uid 1001)
 #   mlflow_db  -> uid 999  (postgres user)
 #   phoenix_db   -> uid 999  (postgres user)
+#   agent_db     -> uid 999  (postgres user)
 #   pgadmin    -> uid 5050 (pgadmin user in the dpage/pgadmin4 image; gid 0)
 #   searxng_*  -> uid 977  (searxng user in the searxng/searxng image)
 #   searxng_valkey runs as root, so only the mkdir is needed (no chown)
 ensure_storage_dirs() {
-  local -A owners=( [minio]=100 [mlflow_db]=999 [phoenix_db]=999 [pgadmin]=5050 [searxng_config]=977 [searxng_cache]=977 [searxng_valkey]=0 )
-  local -A groups=( [minio]=101 [mlflow_db]=999 [phoenix_db]=999 [pgadmin]=0 [searxng_config]=977 [searxng_cache]=977 [searxng_valkey]=0 )
+  local -A owners=( [minio]=100 [mlflow_db]=999 [phoenix_db]=999 [agent_db]=999 [pgadmin]=5050 [searxng_config]=977 [searxng_cache]=977 [searxng_valkey]=0 )
+  local -A groups=( [minio]=101 [mlflow_db]=999 [phoenix_db]=999 [agent_db]=999 [pgadmin]=0 [searxng_config]=977 [searxng_cache]=977 [searxng_valkey]=0 )
   local dir path uid
-  for dir in minio mlflow_db phoenix_db pgadmin searxng_config searxng_cache searxng_valkey; do
+  for dir in minio mlflow_db phoenix_db agent_db pgadmin searxng_config searxng_cache searxng_valkey; do
     path="$ROOT/.storage/$dir"
     uid="${owners[$dir]}"
     mkdir -p "$path"

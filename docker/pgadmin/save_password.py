@@ -21,13 +21,16 @@ import sys
 os.chdir("/pgadmin4")
 sys.path.insert(0, "/pgadmin4")
 
-# These modules only exist inside the pgAdmin container image; the script runs
-# there, after the chdir/sys.path setup above, so the imports cannot resolve
-# in the dev environment.
 from pgadmin import create_app
 from pgadmin.model import Server, db
 from pgadmin.utils.crypto import decrypt, encrypt
 
+# These modules only exist inside the pgAdmin container image; the script runs
+# there, after the chdir/sys.path setup above, so the imports cannot resolve
+# in the dev environment.
+# NOTE: `config` must be imported before `pgadmin`; importing pgadmin first
+# hits a circular import (pgadmin.model -> config -> pgadmin.utils.paths ->
+# pgadmin.model, which is only partially initialized at that point).
 import config
 
 SERVERS_JSON = os.environ.get("PGADMIN_SERVER_JSON_FILE", "/tmp/servers.json")
@@ -41,6 +44,7 @@ def main() -> None:
 
     app = create_app(config.APP_NAME + "-setup")
     app.PGADMIN_RUNTIME = False
+    missing = []
     with app.test_request_context():
         for spec in specs:
             name = spec.get("Name")
@@ -50,6 +54,7 @@ def main() -> None:
             server = Server.query.filter_by(name=name).first()
             if server is None:
                 print(f"pgadmin-init: server '{name}' not found; not saving password")
+                missing.append(name)
                 continue
             if not login_password or not db_password:
                 print(f"pgadmin-init: missing login/db password for '{name}'; not saving")
@@ -69,6 +74,11 @@ def main() -> None:
                 server.save_password = 1
                 db.session.commit()
                 print(f"pgadmin-init: saved database password for '{name}'")
+
+    if missing:
+        # Exit non-zero so the entrypoint's retry loop re-runs the script in
+        # case the server list was still being (re)imported.
+        sys.exit(1)
 
 
 if __name__ == "__main__":
