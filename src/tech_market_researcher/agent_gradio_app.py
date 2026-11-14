@@ -1,4 +1,4 @@
-"""Gradio web UI for chatting with the agent."""
+"""Gradio app for chatting with the agent."""
 
 from dotenv import load_dotenv
 
@@ -17,7 +17,7 @@ from tech_market_researcher.core.constants import DEFAULT_SESSION_ID, DEFAULT_TI
 
 # pylint: enable=wrong-import-position
 
-WEB_UI_PORT = 8899
+GRADIO_APP_PORT = 8899
 
 # Mapping from LangChain message types to the roles Gradio chat items use.
 _ROLES = {"human": "user", "ai": "assistant"}
@@ -28,8 +28,13 @@ def _to_chat_items(history: list[dict[str, str]]) -> list[dict[str, str]]:
     return [{"role": _ROLES[message["role"]], "content": message["content"]} for message in history]
 
 
+theme = gr.themes.Default(
+    text_size=gr.themes.sizes.text_lg,
+)
+
+
 def main() -> None:
-    """Build and launch the web UI, listening on all interfaces (incl. Tailscale)."""
+    """Build and launch the web UI."""
     args = get_args(AgentCommandLineArguments)
     agent = create_agent(args)
 
@@ -48,7 +53,7 @@ def main() -> None:
         ]
         return history, _to_chat_items(history)
 
-    with gr.Blocks(title="Tech Market Researcher") as demo:
+    with gr.Blocks(title="Tech Market Researcher", theme=theme) as demo:
         gr.Markdown("# Tech Market Researcher")
         chatbot = gr.Chatbot(height=500)
         history = gr.State([])
@@ -61,7 +66,7 @@ def main() -> None:
         textbox.submit(respond, inputs=events, outputs=results)
         gr.Button("Submit").click(respond, inputs=events, outputs=results)
 
-    demo.queue().launch(server_name="0.0.0.0", server_port=WEB_UI_PORT)
+    demo.queue().launch(server_name="0.0.0.0", server_port=GRADIO_APP_PORT)
 
 
 if __name__ == "__main__":
