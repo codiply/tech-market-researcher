@@ -18,12 +18,12 @@ from tech_market_researcher.agents.main import TechMarketResearcherAgent
 PHOENIX_SERVER_URI_ENV = "PHOENIX_SERVER_URI"
 
 
-def _predict_fn_for(agent: TechMarketResearcherAgent, record_input: Mapping[str, Any]) -> str:
+async def _predict_fn_for(agent: TechMarketResearcherAgent, record_input: Mapping[str, Any]) -> str:
     """Run one agent turn for a dataset record and return the final response text."""
     messages = record_input["messages"]
     context = record_input.get("context", {})
     runtime_context = build_runtime_context(context)
-    result = agent.invoke(messages, runtime_context)
+    result = await agent.ainvoke(messages, runtime_context)
     return result["messages"][-1].content
 
 
@@ -36,9 +36,9 @@ def phoenix_evaluate(config: PhoenixEvaluationConfig, agent: TechMarketResearche
     """Evaluate the agent against the Phoenix dataset named by the config using its evaluators."""
     evaluators = build_evaluators_list(config)
 
-    def task(record_input: Mapping[str, Any]) -> str:
+    async def task(record_input: Mapping[str, Any]) -> str:
         """Run one agent turn for a dataset record and return the final response text."""
-        return _predict_fn_for(agent, record_input)
+        return await _predict_fn_for(agent, record_input)
 
     # Phoenix's sync API runs serially; the async API's `concurrency` parameter controls how
     # many tasks and evaluations run in parallel. Unset/0 leaves the Phoenix default (3).

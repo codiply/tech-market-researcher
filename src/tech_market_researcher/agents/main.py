@@ -24,7 +24,7 @@ class TechMarketResearcherAgent:
         self._agent = agent
         self._environment = environment
 
-    def invoke(
+    async def ainvoke(
         self,
         messages: list[dict[str, str]],
         context: AgentRuntimeContext,
@@ -38,12 +38,12 @@ class TechMarketResearcherAgent:
         # The AgentRuntimeContext constructor always generates a session id, so it is never None here.
         assert context.session_id is not None
         with agent_trace_context(context.session_id, self._environment):
-            return self._agent.invoke({"messages": messages}, config=config, context=context, version="v1")
+            return await self._agent.ainvoke({"messages": messages}, config=config, context=context, version="v1")
 
-    def get_messages(self, context: AgentRuntimeContext) -> list[BaseMessage]:
+    async def get_messages(self, context: AgentRuntimeContext) -> list[BaseMessage]:
         """Return the stored messages for the conversation under the context's thread id, if any."""
         config: RunnableConfig = {"configurable": {"thread_id": context.thread_id}}
-        state = self._agent.get_state(config)
+        state = await self._agent.aget_state(config)
         return state.values.get("messages", [])
 
 

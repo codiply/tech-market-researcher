@@ -1,6 +1,8 @@
 """MLflow evaluation runner."""
 
+import asyncio
 import os
+import threading
 from datetime import datetime, timezone
 
 import mlflow
@@ -21,10 +23,12 @@ def _find_dataset(client: mlflow.MlflowClient, experiment_id: str, name: str):
     raise ValueError(f"Dataset '{name}' not found in experiment with id {experiment_id}.")
 
 
-def _predict_fn_for(agent: TechMarketResearcherAgent, messages: list[dict[str, str]], context: dict[str, str]) -> str:
+async def _predict_fn_for(
+    agent: TechMarketResearcherAgent, messages: list[dict[str, str]], context: dict[str, str]
+) -> str:
     """Run one agent turn for a dataset record and return the final response text."""
     runtime_context = build_runtime_context(context)
-    result = agent.invoke(messages, runtime_context)
+    result = await agent.ainvoke(messages, runtime_context)
     return result["messages"][-1].content
 
 
@@ -65,9 +69,16 @@ def mlflow_evaluate(config: MlflowEvaluationConfig, agent: TechMarketResearcherA
             if record.expectations
         ]
 
+        # MLflow's evaluation harness runs each record on its own short-lived event loop, but
+        # the agent's async model client caches a connection pool bound to the loop it first
+        # runs on; reusing that pool from a closed loop raises `RuntimeError: Event loop is
+        # closed`. So every agent call is driven by one dedicated, long-lived loop instead.
+        agent_loop = asyncio.new_event_loop()
+        threading.Thread(target=agent_loop.run_forever, daemon=True).start()
+
         def predict_fn(messages: list[dict[str, str]], context: dict[str, str]) -> str:
             """Run one agent turn for a dataset record and return the final response text."""
-            return _predict_fn_for(agent, messages, context)
+            return asyncio.run_coroutine_threadsafe(_predict_fn_for(agent, messages, context), agent_loop).result()
 
         # The judge runs against the AI Gateway endpoint of the active tracking server.
         scorers: list[Scorer] = build_scorers_list(config)

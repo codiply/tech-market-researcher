@@ -1,6 +1,6 @@
 """Gradio app for chatting with the agent."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from dotenv import load_dotenv
@@ -71,10 +71,10 @@ theme = gr.themes.Default(
 
 
 def _build_ui(
-    respond: Callable[[str], tuple[list[dict[str, str]], str, dict[str, Any]]],
+    respond: Callable[[str], Awaitable[tuple[list[dict[str, str]], str, dict[str, Any]]]],
     update_submit_button: Callable[[str], dict[str, Any]],
-    apply_context: Callable[[str, str, str], list[dict[str, str]]],
-    load_chatbot: Callable[[], tuple[list[dict[str, str]], str, str, str, dict[str, Any]]],
+    apply_context: Callable[[str, str, str], Awaitable[list[dict[str, str]]]],
+    load_chatbot: Callable[[], Awaitable[tuple[list[dict[str, str]], str, str, str, dict[str, Any]]]],
 ) -> gr.Blocks:
     """Build the Gradio UI and wire up its events; callbacks close over the agent and context."""
     with gr.Blocks(title="Tech Market Researcher") as demo:
@@ -114,7 +114,7 @@ def main() -> None:
     agent = create_agent(args)
     context = ChatBotContext(user_id=DEFAULT_USER_ID, session_id=DEFAULT_SESSION_ID, time_zone=DEFAULT_TIME_ZONE)
 
-    def load_chatbot() -> tuple[list[dict[str, str]], str, str, str, dict[str, Any]]:
+    async def load_chatbot() -> tuple[list[dict[str, str]], str, str, str, dict[str, Any]]:
         """Restore the conversation persisted in the checkpointer, if any.
 
         Also returns the server-side context values so every browser shows the
@@ -122,24 +122,24 @@ def main() -> None:
         button (the textbox starts empty).
         """
         return (
-            _to_chat_items(agent.get_messages(context.to_agent_runtime_context())),
+            _to_chat_items(await agent.get_messages(context.to_agent_runtime_context())),
             context.user_id,
             context.session_id,
             context.time_zone,
             gr.update(interactive=False),
         )
 
-    def apply_context(user_id: str, session_id: str, time_zone: str) -> list[dict[str, str]]:
+    async def apply_context(user_id: str, session_id: str, time_zone: str) -> list[dict[str, str]]:
         """Switch to the given conversation thread and load the messages stored for it."""
         nonlocal context
         context = ChatBotContext(user_id=user_id, session_id=session_id, time_zone=time_zone)
-        return _to_chat_items(agent.get_messages(context.to_agent_runtime_context()))
+        return _to_chat_items(await agent.get_messages(context.to_agent_runtime_context()))
 
     def update_submit_button(message: str) -> dict[str, Any]:
         """Disable the submit button while the textbox is empty (or whitespace only)."""
         return gr.update(interactive=bool(message.strip()))
 
-    def respond(message: str) -> tuple[list[dict[str, str]], str, dict[str, Any]]:
+    async def respond(message: str) -> tuple[list[dict[str, str]], str, dict[str, Any]]:
         """Run one turn of the conversation; the checkpointer supplies the prior messages.
 
         Empties the textbox afterwards and keeps the submit button disabled for the
@@ -147,8 +147,8 @@ def main() -> None:
         """
         agent_runtime = context.to_agent_runtime_context()
         if not message.strip():
-            return _to_chat_items(agent.get_messages(agent_runtime)), "", gr.update(interactive=False)
-        result = agent.invoke([{"role": "user", "content": message}], context=agent_runtime)
+            return _to_chat_items(await agent.get_messages(agent_runtime)), "", gr.update(interactive=False)
+        result = await agent.ainvoke([{"role": "user", "content": message}], context=agent_runtime)
         return _to_chat_items(result["messages"]), "", gr.update(interactive=False)
 
     demo = _build_ui(respond, update_submit_button, apply_context, load_chatbot)

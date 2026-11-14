@@ -1,5 +1,7 @@
 """Interactive chat agent talking to an MLflow AI Gateway endpoint."""
 
+import asyncio
+
 from dotenv import load_dotenv
 
 # Load .env from the current directory (real env vars take precedence)
@@ -22,13 +24,19 @@ console = Console()
 def main() -> None:
     """Run the interactive chat REPL against the configured gateway endpoint."""
     args = get_args(CliCommandLineArguments)
+    # One event loop for the whole REPL: the agent's async model client caches its
+    # connection pool on the loop it first runs on, so a fresh loop per turn breaks it.
+    asyncio.run(_chat(args))
 
+
+async def _chat(args: CliCommandLineArguments) -> None:
+    """Run the interactive chat REPL on a single event loop."""
     agent = create_agent(args)
     context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
     console.print(f"[dim]Runtime context:\n{context.model_dump_json(indent=2)}[/]")
 
     # Replay the stored conversation for this session, if any.
-    for message in agent.get_messages(context):
+    for message in await agent.get_messages(context):
         if message.type == "human":
             console.print(f"[bold red]you> [/bold red]{message.content}")
         elif message.type == "ai":
@@ -42,7 +50,7 @@ def main() -> None:
             continue
 
         # The checkpointer resumes the conversation, so only the new turn is passed.
-        result = agent.invoke([{"role": "user", "content": user_input}], context=context)
+        result = await agent.ainvoke([{"role": "user", "content": user_input}], context=context)
         console.print("[bold cyan]agent>[/bold cyan]", result["messages"][-1].content)
 
 

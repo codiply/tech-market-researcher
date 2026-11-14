@@ -1,7 +1,9 @@
 """Textual web app for chatting with the agent, served in the browser via textual-serve."""
 
+import asyncio
 import sys
-from typing import Any
+import threading
+from typing import Any, Coroutine
 
 from dotenv import load_dotenv
 
@@ -110,6 +112,16 @@ class ChatApp(App):
             user_id=DEFAULT_USER_ID, session_id=DEFAULT_SESSION_ID, time_zone=DEFAULT_TIME_ZONE
         )
         self._busy = False
+        # One event loop for the life of the app, owned by a dedicated thread: the agent's
+        # async model client caches its connection pool on the loop it first runs on, so
+        # every agent call must share this loop.
+        self._agent_loop = asyncio.new_event_loop()
+        self._agent_thread = threading.Thread(target=self._agent_loop.run_forever, daemon=True)
+        self._agent_thread.start()
+
+    def _agent_result(self, coro: Coroutine[Any, Any, Any]) -> Any:
+        """Run a coroutine on the agent's event loop, blocking this thread until it returns."""
+        return asyncio.run_coroutine_threadsafe(coro, self._agent_loop).result()
 
     @property
     def runtime_context(self) -> AgentRuntimeContext:
@@ -133,7 +145,7 @@ class ChatApp(App):
     def on_mount(self) -> None:
         """Focus the composer and restore the conversation persisted for the default session."""
         self.query_one("#message", Input).focus()
-        self._refresh_messages(self._agent.get_messages(self.runtime_context))
+        self._refresh_messages(self._agent_result(self._agent.get_messages(self.runtime_context)))
 
     def _message_input(self) -> Input:
         """The composer input."""
@@ -172,7 +184,7 @@ class ChatApp(App):
             session_id=self.query_one("#session-id", Input).value,
             time_zone=self.query_one("#time-zone", Input).value,
         )
-        self._refresh_messages(self._agent.get_messages(self.runtime_context))
+        self._refresh_messages(self._agent_result(self._agent.get_messages(self.runtime_context)))
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Submit when Enter is pressed in the composer."""
@@ -191,7 +203,9 @@ class ChatApp(App):
         """Run one turn of the conversation in a background thread so the UI stays responsive."""
         # The checkpointer resumes the conversation, so only the new turn is passed.
         try:
-            result = self._agent.invoke([{"role": "user", "content": message}], context=self.runtime_context)
+            result = self._agent_result(
+                self._agent.ainvoke([{"role": "user", "content": message}], context=self.runtime_context)
+            )
         # Surface any failure in the transcript instead of crashing the session.
         except Exception as error:  # pylint: disable=broad-exception-caught
             self.app.call_from_thread(self._notify, Text(f"Error: {error}", style="bold red"))
