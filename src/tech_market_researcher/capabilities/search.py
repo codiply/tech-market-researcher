@@ -16,7 +16,7 @@ from langchain_core.tools import BaseTool, StructuredTool
 from tavily import TavilyClient
 
 from tech_market_researcher.core.configuration import SearchProvider, SearchToolConfig
-from tech_market_researcher.core.constants import SEARXNG_URL
+from tech_market_researcher.core.environment import SEARXNG_URL
 
 SEARCH_TOOL_NAME = "web_search"
 SEARCH_MAX_RESULT_COUNT_DEFAULT = 5

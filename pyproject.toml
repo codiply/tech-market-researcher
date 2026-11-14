@@ -25,11 +25,14 @@ dependencies = [
     "markdownify~=1.2.3",
     "arize-phoenix~=21.0.0",
     "gradio~=6.32.0",
+    "textual~=8.2.8",
+    "textual-serve~=1.1.3",
 ]
 
 [project.scripts]
 agent_cli = "tech_market_researcher.agent_cli:main"
 agent_gradio_app = "tech_market_researcher.agent_gradio_app:main"
+agent_textual_app = "tech_market_researcher.agent_textual_app:main"
 bootstrap = "bootstrapping.main:main"
 evals = "evaluations.main:main"
 
