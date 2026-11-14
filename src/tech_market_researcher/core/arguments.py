@@ -7,7 +7,6 @@ from typing import Self
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.constants import (
     DEFAULT_CONFIG_NAME,
-    DEFAULT_SESSION_ID,
     DEFAULT_TIME_ZONE,
     DEFAULT_USER_ID,
 )
@@ -41,7 +40,7 @@ class CliCommandLineArguments(AgentCommandLineArguments):
     """Command-line arguments for the CLI, including agent-run identity."""
 
     user_id: str
-    session_id: str
+    session_id: str | None = None
     time_zone: str
 
     @classmethod
@@ -49,7 +48,8 @@ class CliCommandLineArguments(AgentCommandLineArguments):
         """Register the CLI command-line arguments on parser, including the agent's."""
         super().add_arguments(parser)
         parser.add_argument("--user-id", default=DEFAULT_USER_ID, help="User ID for the agent run.")
-        parser.add_argument("--session-id", default=DEFAULT_SESSION_ID, help="Session ID for the agent run.")
+        # No default: the runtime context generates a random session id when omitted, so each run starts a new thread.
+        parser.add_argument("--session-id", default=None, help="Session ID for the agent run.")
         parser.add_argument(
             "--time-zone",
             default=DEFAULT_TIME_ZONE,

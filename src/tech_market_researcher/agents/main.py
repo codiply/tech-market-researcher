@@ -4,17 +4,19 @@ from collections.abc import Callable
 from typing import Any
 
 from deepagents import create_deep_agent
+from langchain_core.messages import BaseMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.graph.state import CompiledStateGraph
 
 from tech_market_researcher.capabilities.builders import build_middleware_list, build_tool_list
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
+from tech_market_researcher.core.checkpointing import get_checkpointer
 from tech_market_researcher.core.common import AgentRuntimeContext
 from tech_market_researcher.core.configuration import ApplicationConfig, load_config
 from tech_market_researcher.core.observability import agent_trace_context, setup_observability
 
 
-# pylint: disable=too-few-public-methods
 class TechMarketResearcherAgent:
     """The agent, wrapping each invocation in MLflow tracing with session and agent metadata."""
 
@@ -22,10 +24,27 @@ class TechMarketResearcherAgent:
         self._agent = agent
         self._environment = environment
 
-    def invoke(self, messages: list[dict[str, str]], context: AgentRuntimeContext) -> dict[str, Any]:
-        """Run one turn, tracing it under the session id and agent metadata."""
+    def invoke(
+        self,
+        messages: list[dict[str, str]],
+        context: AgentRuntimeContext,
+    ) -> dict[str, Any]:
+        """Run one turn, tracing it under the session id and agent metadata.
+
+        Prior conversation is resumed from the checkpointer under the context's thread id,
+        so messages should only contain the new turns.
+        """
+        config: RunnableConfig = {"configurable": {"thread_id": context.thread_id}}
+        # The AgentRuntimeContext constructor always generates a session id, so it is never None here.
+        assert context.session_id is not None
         with agent_trace_context(context.session_id, self._environment):
-            return self._agent.invoke({"messages": messages}, context=context)
+            return self._agent.invoke({"messages": messages}, config=config, context=context, version="v1")
+
+    def get_messages(self, context: AgentRuntimeContext) -> list[BaseMessage]:
+        """Return the stored messages for the conversation under the context's thread id, if any."""
+        config: RunnableConfig = {"configurable": {"thread_id": context.thread_id}}
+        state = self._agent.get_state(config)
+        return state.values.get("messages", [])
 
 
 def create_agent(
@@ -53,5 +72,6 @@ def create_agent(
         tools=build_tool_list(capabilities),
         middleware=build_middleware_list(capabilities),
         context_schema=AgentRuntimeContext,
+        checkpointer=get_checkpointer(config.supervisor.checkpointer),
     )
     return TechMarketResearcherAgent(agent, config.environment)

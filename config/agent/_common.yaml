@@ -7,6 +7,8 @@ supervisor:
   model:
     provider: mlflow_gateway
     name: omlx.Qwen3.8-27B-oQ4e-mtp
+  checkpointer:
+    backend: memory
   capabilities:
     runtime_context_debugger:
       enabled: true

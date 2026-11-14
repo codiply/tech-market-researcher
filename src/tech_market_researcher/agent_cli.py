@@ -25,9 +25,15 @@ def main() -> None:
 
     agent = create_agent(args)
     context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
+    console.print(f"[dim]Runtime context:\n{context.model_dump_json(indent=2)}[/]")
 
+    # Replay the stored conversation for this session, if any.
+    for message in agent.get_messages(context):
+        if message.type == "human":
+            console.print(f"[bold red]you> [/bold red]{message.content}")
+        elif message.type == "ai":
+            console.print(f"[bold cyan]agent>[/bold cyan] {message.content}")
     console.print("Chat with the agent. Type 'exit' to quit.")
-    messages: list = []
     while True:
         user_input = console.input("[bold red]you> [/bold red]").strip()
         if user_input.lower() in {"exit", "quit"}:
@@ -35,10 +41,8 @@ def main() -> None:
         if not user_input:
             continue
 
-        messages.append({"role": "user", "content": user_input})
-        result = agent.invoke(messages, context=context)
-        # Keep the full conversation (incl. the agent's reply) for the next turn
-        messages = result["messages"]
+        # The checkpointer resumes the conversation, so only the new turn is passed.
+        result = agent.invoke([{"role": "user", "content": user_input}], context=context)
         console.print("[bold cyan]agent>[/bold cyan]", result["messages"][-1].content)
 
 

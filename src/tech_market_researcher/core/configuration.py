@@ -80,6 +80,18 @@ class CurrentDateTimeConfig(BasePydanticModel):
     enabled: bool = False
 
 
+class CheckpointerBackend(str, Enum):
+    """Available conversation checkpointer backends."""
+
+    MEMORY = "memory"
+
+
+class CheckpointerConfig(BasePydanticModel):
+    """Conversation checkpointer settings. Omit the section to use the memory backend."""
+
+    backend: CheckpointerBackend = CheckpointerBackend.MEMORY
+
+
 class CapabilitiesConfig(BasePydanticModel):
     """Settings for the tools and middlewares available to the agent."""
 
@@ -95,6 +107,7 @@ class SupervisorConfig(BasePydanticModel):
 
     model: ModelConfig
     system_prompt: str
+    checkpointer: CheckpointerConfig = Field(default_factory=CheckpointerConfig)
     capabilities: CapabilitiesConfig
 
 
