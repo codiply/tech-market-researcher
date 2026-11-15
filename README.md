@@ -29,6 +29,7 @@ The stack exposes:
 | MLflow database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5433` | backend store; credentials in `.env` (`MLFLOW_DB_*`) |
 | Phoenix database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5434` | backend store; credentials in `.env` (`PHOENIX_DB_*`) |
 | Agent database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5435` | agent's database; credentials in `.env` (`AGENT_DB_*`) |
+| [Chroma](https://www.trychroma.com/) (API) | [http://0.0.0.0:8385](http://0.0.0.0:8385) | vector store (RAG); API only, no UI, no auth (local service) |
 
 ## Run the agent
 

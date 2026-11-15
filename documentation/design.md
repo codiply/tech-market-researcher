@@ -31,6 +31,7 @@ flowchart LR
         end
         phoenix_db["phoenix_db<br/>Postgres 17"]
         agent_db["agent_db<br/>Postgres 17"]
+        chroma["chroma<br/>Chroma (vector store)"]
     end
 
     macbook["MacBook (M5 Pro)<br/>OMLX server<br/>e.g. Qwen3.8-27B-oQ4e-mtp"]
@@ -72,7 +73,7 @@ flowchart LR
 - **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Phoenix** (datasets and results are stored as a Phoenix experiment in Phoenix).
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces. It also monitors token usage and cost in real time, and supports budgets that cap spending, so a runaway agent run can't keep consuming tokens and money indefinitely.
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
-- **Supporting containers** — three separate [Postgres](https://www.postgresql.org) instances (MLflow's backend store, Phoenix's backend store, and the agent's database), [Arize Phoenix](https://arize.com) (LLM/agent observability), [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI for all three Postgres instances).
+- **Supporting containers** — three separate [Postgres](https://www.postgresql.org) instances (MLflow's backend store, Phoenix's backend store, and the agent's database), [Chroma](https://www.trychroma.com/) (vector store), [Arize Phoenix](https://arize.com) (LLM/agent observability), [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI for all three Postgres instances).
 
 ## Bootstrapping
 
