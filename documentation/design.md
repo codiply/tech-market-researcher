@@ -47,6 +47,8 @@ flowchart LR
     main -->|search tool| searxng
     main -->|search tool - alternative| tavily
     main -->|fetch_page tool| web
+    main -->|web page index tools| chroma
+    main -->|embeddings (not via gateway)| macbook
     main -->|conversation checkpoints| agent_db
     mlflow_evals -->|runs the agent| main
     mlflow_evals -->|judge requests| gateway
@@ -75,6 +77,7 @@ flowchart LR
 - **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Phoenix** (datasets and results are stored as a Phoenix experiment in Phoenix).
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces. It also monitors token usage and cost in real time, and supports budgets that cap spending, so a runaway agent run can't keep consuming tokens and money indefinitely.
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
+- **Web page index** — the agent can store web page content in the Chroma vector store and query it with similarity search, so it can build up and reuse an index of pages it has seen. Documents are embedded by the OMLX embeddings endpoint, called directly by the agent (the AI Gateway does not proxy embeddings).
 - **Supporting containers** — three separate [Postgres](https://www.postgresql.org) instances (MLflow's backend store, Phoenix's backend store, and the agent's database), [Chroma](https://www.trychroma.com/) (vector store), [Chroma Admin](https://github.com/flanker/chromadb-admin) (its web UI), [Arize Phoenix](https://arize.com) (LLM/agent observability), [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI for all three Postgres instances).
 
 ## Bootstrapping
@@ -271,6 +274,7 @@ flowchart TB
     pi -->|LLM requests| omix
     cli -->|runs| main
     main --> gateway
+    main -->|embeddings| omix
     gateway -->|local model| omix
     gateway -->|cloud model via Bedrock long-term API key| aws
 ```
@@ -278,5 +282,5 @@ flowchart TB
 - **Newer MacBook (M5 Pro)** — dedicated to serving models through [OMLX](https://omlx.ai/), reachable over the local network. Its wired memory limit is raised as high as possible and no other applications run on it, so it is used for model serving only.
 - **Older MacBook (host)** — runs VS Code on the host, which opens a remote CLI in the Ubuntu VM over SSH and edits the code in the VM directly using the Remote-SSH extension. A browser on the host is used to view the MLflow and Phoenix UIs and the agent's web UIs; VS Code exposes the VM's service ports on 0.0.0.0 on the host. [VMware](https://www.vmware.com/) hosts the Ubuntu VM on this machine.
 - **Ubuntu VM** — stores the code (the git repo) and runs all the scripts, the Docker services, and the [Pi](https://pi.dev) agentic harness. The Tech Market Researcher Agent is run from the CLI or from a web UI — the Gradio App (on port `8899`) or the Textual App (on port `8898`), both listening on `0.0.0.0`. It is deliberately a sandbox: it holds no secrets other than the ones this project needs and no personal user data.
-- **Models** — Pi talks directly to the OMLX server; the DeepAgents agent goes through the MLflow AI Gateway, which routes to the OMLX server (default) or to [AWS Bedrock](https://aws.amazon.com/bedrock/). The gateway uses a long-term Bedrock API key to access Bedrock, which grants access to specific models only (Amazon Nova chat models) and can be activated or deactivated at will. The full list of gateway models is in [models.md](models.md).
+- **Models** — Pi talks directly to the OMLX server; the DeepAgents agent goes through the MLflow AI Gateway, which routes to the OMLX server (default) or to [AWS Bedrock](https://aws.amazon.com/bedrock/). The agent also talks to the OMLX server directly for document embeddings (the web page index), since the gateway does not proxy the embeddings endpoint. The gateway uses a long-term Bedrock API key to access Bedrock, which grants access to specific models only (Amazon Nova chat models) and can be activated or deactivated at will. The full list of gateway models is in [models.md](models.md).
 - **Mobile phone** — [Tailscale](https://tailscale.com/) is a software-defined mesh VPN, running on both the Ubuntu VM and the phone. It is configured with one-way access from the phone to the VM (the VM is sandboxed), so the browser on the phone can reach any UI running on the VM, for example: the MLflow UI, Phoenix and the agent's web UIs.
