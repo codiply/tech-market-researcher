@@ -90,6 +90,36 @@ services:
       timeout: 5s
       retries: 5
 
+  # Web UI for the Chroma vector store (browse collections and records).
+  # The pre-built image on Docker Hub is arm64-only, so build it locally
+  # from the pinned release tag (see ./chroma_admin). No volumes: the
+  # connection to the Chroma server is chosen in the UI and stored in the
+  # browser's local storage, so the container is stateless.
+  chroma_admin:
+    build:
+      context: ./chroma_admin
+    image: tech-market-researcher/chroma-admin:local
+    container_name: chroma_admin
+    depends_on:
+      chroma:
+        condition: service_healthy
+    ports:
+      # Unusual host port to avoid conflicts with common services.
+      - "8386:3001"
+    healthcheck:
+      # The image ships no curl/wget, so probe the UI with Node's fetch.
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://localhost:3001/')
+            .then(r => process.exit(r.ok ? 0 : 1))
+            .catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Meta-search backend for the search tool. Official image from
   # https://docs.searxng.org/admin/installation-docker.html
   searxng:

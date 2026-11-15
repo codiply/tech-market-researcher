@@ -22,6 +22,7 @@ The stack exposes:
 | [SearXNG](https://docs.searxng.org/) (UI) | [http://0.0.0.0:8384](http://0.0.0.0:8384) | local metasearch backend for the search tool; its JSON API powers the agent, no login |
 | [MinIO](https://min.io) (UI) | [http://0.0.0.0:9001](http://0.0.0.0:9001) | log in with `minio` / `minio12345` (fixed local default; MinIO requires an 8+ char root password) |
 | [pgAdmin](https://www.pgadmin.org) (UI) | [http://0.0.0.0:5050](http://0.0.0.0:5050) | log in with `admin@example.com` / `pgadmin12345` (fixed local default, override with `PGADMIN_PASSWORD`); the MLflow, Phoenix, and agent databases are pre-configured with the `MLFLOW_DB_*` / `PHOENIX_DB_*` / `AGENT_DB_*` credentials from `.env` |
+| [Chroma Admin](https://github.com/flanker/chromadb-admin) (UI) | [http://0.0.0.0:8386](http://0.0.0.0:8386) | web UI for the Chroma vector store; on first use it shows a setup page with the connection settings below |
 | [Arize Phoenix](https://arize.com) (UI) | [http://0.0.0.0:6006](http://0.0.0.0:6006) | LLM/agent observability server + UI; also the OTLP HTTP collector on `6006` and gRPC collector on `4317` |
 | Gradio App (Web UI) | [http://0.0.0.0:8899](http://0.0.0.0:8899) | chat app for the agent; not part of the docker stack — started separately with `uv run agent_gradio_app` |
 | Textual App (Web UI) | [http://0.0.0.0:8898](http://0.0.0.0:8898) | chat app for the agent; not part of the docker stack — started separately with `uv run agent_textual_app` |
@@ -30,6 +31,8 @@ The stack exposes:
 | Phoenix database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5434` | backend store; credentials in `.env` (`PHOENIX_DB_*`) |
 | Agent database ([Postgres](https://www.postgresql.org)) | `0.0.0.0:5435` | agent's database; credentials in `.env` (`AGENT_DB_*`) |
 | [Chroma](https://www.trychroma.com/) (API) | [http://0.0.0.0:8385](http://0.0.0.0:8385) | vector store (RAG); API only, no UI, no auth (local service) |
+
+The Chroma Admin UI is stateless: its setup page (shown until you save settings, kept in your browser's localStorage) asks for the Chroma connection — use connection string `http://chroma:8000` (queries run server-side in the UI container, so it must be the container name, not `http://localhost:8385`), tenant `default_tenant`, database `default_database`, and no auth.
 
 ## Run the agent
 
