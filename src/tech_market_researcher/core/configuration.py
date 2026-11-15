@@ -80,6 +80,21 @@ class CurrentDateTimeConfig(BasePydanticModel):
     enabled: bool = False
 
 
+class WebPageIndexerConfig(BasePydanticModel):
+    """Web-page indexer tool settings. Omit the section (or set enabled: false) to disable."""
+
+    enabled: bool = False
+    collection_name: str | None = None
+    embeddings_model_name: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_enabled_fields(self) -> "WebPageIndexerConfig":
+        if self.enabled and (self.collection_name is None or self.embeddings_model_name is None):
+            msg = "web_page_indexer requires collection_name and embeddings_model_name when enabled"
+            raise ValueError(msg)
+        return self
+
+
 class CheckpointerBackend(str, Enum):
     """Available conversation checkpointer backends."""
 
@@ -125,6 +140,7 @@ class CapabilitiesConfig(BasePydanticModel):
     fetch_page: FetchPageConfig = Field(default_factory=FetchPageConfig)
     search: SearchToolConfig = Field(default_factory=SearchToolConfig)
     todo_list: TodoListConfig = Field(default_factory=TodoListConfig)
+    web_page_indexer: WebPageIndexerConfig = Field(default_factory=WebPageIndexerConfig)
 
 
 class SupervisorConfig(BasePydanticModel):

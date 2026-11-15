@@ -29,6 +29,10 @@ supervisor:
       # provider: tavily
     todo_list:
       enabled: true
+    web_page_indexer:
+      enabled: true
+      collection_name: web-page-index
+      embeddings_model_name: Qwen3-Embedding-0.6B-4bit-DWQ
 observability:
   mlflow:
     enabled: true
