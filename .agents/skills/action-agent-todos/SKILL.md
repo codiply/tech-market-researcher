@@ -1,15 +1,15 @@
 ---
-name: fix-agent-todos
-description: "Find and action AGENT_TODO: markers in the codebase, treating each marker as an instruction to follow. Use only when the user explicitly asks to fix or action AGENT_TODO markers."
+name: action-agent-todos
+description: "Find and action AGENT_TODO: markers in the codebase, treating each marker as an instruction to follow. Use only when the user explicitly asks to action AGENT_TODO markers."
 ---
 
-# Fix Agent TODOs
+# Action Agent TODOs
 
 `AGENT_TODO:` markers in the code are instructions left for the agent. Action each one.
 
 ## Steps
 
-1. Find all markers: `rg -n "AGENT(S)?_TODO:" --no-ignore --hidden -g '!.venv' -g '!.git' -g '!.mypy_cache' -g '!.pytest_cache' -g '!.agents/skills/fix-agent-todos'`
+1. Find all markers: `rg -n "AGENT(S)?_TODO:" --no-ignore --hidden -g '!.venv' -g '!.git' -g '!.mypy_cache' -g '!.pytest_cache' -g '!.agents/skills/action-agent-todos'`
    - `AGENT(S)?_TODO` also catches misspelled `AGENTS_TODO:` markers.
    - `--hidden` is needed so dot-directories (e.g. `.agents`, `.github`) are searched; `--no-ignore` alone does not cover them.
    - If none are found, tell the user there are no pending AGENT_TODOs and stop.
