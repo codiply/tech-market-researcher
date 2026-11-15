@@ -13,13 +13,15 @@ load_dotenv()
 # These imports must run after load_dotenv(): the agent talks to the MLflow
 # AI Gateway, whose settings come from .env (real env vars take precedence).
 # pylint: disable=wrong-import-position
+import aiohttp_jinja2
+from aiohttp import web
 from langchain_core.messages import BaseMessage
 from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Button, Footer, Header, Input, OptionList
-from textual_serve.server import Server
+from textual_serve.server import Server, to_int
 
 from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
 from tech_market_researcher.core.arguments import AgentCommandLineArguments, get_args
@@ -34,6 +36,41 @@ from tech_market_researcher.core.environment import TAILSCALE_HOST_NAME
 # pylint: enable=wrong-import-position
 
 TEXTUAL_APP_PORT = 8898
+
+
+class HostAwareServer(Server):
+    """A textual-serve server that builds the app page from the host the client used.
+
+    textual-serve renders the page around a single fixed ``public_url``, so a browser
+    that connects over a different host (localhost vs. the Tailscale name) is handed a
+    websocket URL it cannot reach. Building the URLs from the request's Host header
+    makes both entry points work.
+    """
+
+    async def handle_index(self, request: web.Request):
+        """Serve the app page with URLs built from the host the client connected over."""
+        router = request.app.router
+        font_size = to_int(request.query.get("fontsize", "16"), 16)
+        # request.host is the Host header, including the port if non-default.
+        base_url = f"{request.scheme}://{request.host}"
+
+        def get_url(route: str, **args: Any) -> str:
+            path = router[route].url_for(**args)
+            return f"{base_url}{path}"
+
+        def get_websocket_url(route: str, **args: Any) -> str:
+            url = get_url(route, **args)
+            scheme = "wss" if request.scheme == "https" else "ws"
+            return f"{scheme}:{url.split(':', 1)[1]}"
+
+        context: dict[str, Any] = {
+            "font_size": font_size,
+            "app_websocket_url": get_websocket_url("websocket"),
+            "config": {"static": {"url": get_url("static", filename="/").rstrip("/") + "/"}},
+            "application": {"name": self.title},
+        }
+        return aiohttp_jinja2.render_template("app_index.html", request, context)
+
 
 # Mapping from LangChain message types to the label shown for each turn.
 _ROLES = {"human": "You", "ai": "Agent"}
@@ -238,13 +275,14 @@ def main() -> None:
     # host name is configured, advertise it as the public URL so browsers on the mesh build
     # their websocket/static URLs against the right host.
     public_url = f"http://{TAILSCALE_HOST_NAME}:{TEXTUAL_APP_PORT}" if TAILSCALE_HOST_NAME else None
-    Server(
+    server = HostAwareServer(
         command,
         host="0.0.0.0",
         port=TEXTUAL_APP_PORT,
         title="Tech Market Researcher",
         public_url=public_url,
-    ).serve()
+    )
+    server.serve()
 
 
 if __name__ == "__main__":
