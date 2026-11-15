@@ -1,9 +1,18 @@
 """Shared models and helpers used across the package."""
 
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class AsyncReleasableResource(Protocol):  # pylint: disable=too-few-public-methods
+    """An object holding async resources, released by awaiting its close() method."""
+
+    async def close(self) -> None:
+        """Release the held resources."""
+        ...
+
 
 # User ids must start with a letter, then contain only alphanumeric characters, underscores and hyphens.
 USER_ID_PATTERN = r"^[A-Za-z][A-Za-z0-9_-]*$"

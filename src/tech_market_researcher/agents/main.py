@@ -1,6 +1,6 @@
 """Supervisor agent backed by the MLflow AI Gateway."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from deepagents import create_deep_agent
@@ -12,7 +12,7 @@ from langgraph.graph.state import CompiledStateGraph
 from tech_market_researcher.capabilities.builders import build_middleware_list, build_tool_list
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.checkpointing import get_checkpointer
-from tech_market_researcher.core.common import AgentRuntimeContext
+from tech_market_researcher.core.common import AgentRuntimeContext, AsyncReleasableResource
 from tech_market_researcher.core.configuration import ApplicationConfig, load_config
 from tech_market_researcher.core.observability import agent_trace_context, setup_observability
 
@@ -20,9 +20,15 @@ from tech_market_researcher.core.observability import agent_trace_context, setup
 class TechMarketResearcherAgent:
     """The agent, wrapping each invocation in MLflow tracing with session and agent metadata."""
 
-    def __init__(self, agent: CompiledStateGraph[Any, Any], environment: str) -> None:
+    def __init__(
+        self,
+        agent: CompiledStateGraph[Any, Any],
+        environment: str,
+        async_releasable_resources: Sequence[AsyncReleasableResource] = (),
+    ) -> None:
         self._agent = agent
         self._environment = environment
+        self._async_releasable_resources = tuple(async_releasable_resources)
 
     async def ainvoke(
         self,
@@ -40,6 +46,19 @@ class TechMarketResearcherAgent:
         with agent_trace_context(context.session_id, self._environment):
             return await self._agent.ainvoke({"messages": messages}, config=config, context=context, version="v1")
 
+    async def __aenter__(self) -> "TechMarketResearcherAgent":
+        """Enter the agent as an async context manager."""
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        """Exit the context, releasing the agent's async resources."""
+        await self.close()
+
+    async def close(self) -> None:
+        """Release the agent's async resources, in the order they were provided."""
+        for resource in self._async_releasable_resources:
+            await resource.close()
+
     async def get_messages(self, context: AgentRuntimeContext) -> list[BaseMessage]:
         """Return the stored messages for the conversation under the context's thread id, if any."""
         config: RunnableConfig = {"configurable": {"thread_id": context.thread_id}}
@@ -54,8 +73,8 @@ async def create_agent(
     """Create the supervisor agent from the loaded config named by args.
 
     If given, config_mutations_hook mutates the loaded config in place before the agent is built.
-    Must be awaited on the same event loop on which the returned agent is invoked,
-    and that loop must outlive the agent; the agent's async components are bound to it.
+    The returned agent is an async context manager: entering it binds the agent to the current
+    event loop, and exiting it releases the agent's async resources (e.g. the connection pool).
     """
     config = load_config(args.config_name)
     if config_mutations_hook is not None:
@@ -68,12 +87,18 @@ async def create_agent(
         api_key=model_connection.api_key,
     )
     capabilities = config.supervisor.capabilities
+    checkpointer_wrapper = await get_checkpointer(config.supervisor.checkpointer)
+    checkpointer = checkpointer_wrapper.checkpointer
     agent = create_deep_agent(
         model=model,
         system_prompt=config.supervisor.system_prompt,
         tools=build_tool_list(capabilities),
         middleware=build_middleware_list(capabilities),
         context_schema=AgentRuntimeContext,
-        checkpointer=await get_checkpointer(config.supervisor.checkpointer),
+        checkpointer=checkpointer,
     )
-    return TechMarketResearcherAgent(agent, config.environment)
+    return TechMarketResearcherAgent(
+        agent,
+        config.environment,
+        async_releasable_resources=(checkpointer_wrapper,),
+    )

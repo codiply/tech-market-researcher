@@ -57,6 +57,32 @@ def _apply_harness_env(harness: HarnessConfig) -> None:
             os.environ[name] = str(value)
 
 
+def _run_mlflow_harness(
+    config: MlflowEvaluationConfig, agent: TechMarketResearcherAgent, agent_loop: asyncio.AbstractEventLoop
+) -> None:
+    """Run the MLflow evaluation harness against the dataset named by the config."""
+    # The run is started on this thread: MLflow's active run is thread-local, and
+    # genai.evaluate reuses the active run, so the named run must be started here.
+    with mlflow.start_run(run_name=_run_name()):
+        experiment = mlflow.set_experiment(config.experiment_name)
+        dataset = _find_dataset(mlflow.MlflowClient(), experiment.experiment_id, config.dataset_name)
+        data = [
+            {"inputs": record.inputs, "expectations": record.expectations}
+            for record in dataset.records
+            if record.expectations
+        ]
+
+        def predict_fn(messages: list[dict[str, str]], context: dict[str, str]) -> str:
+            """Run one agent turn for a dataset record and return the final response text."""
+            # The prediction must run on the agent loop, i.e. the loop the agent was created on,
+            # so the coroutine is dispatched there and its result awaited.
+            return asyncio.run_coroutine_threadsafe(_predict_fn_for(agent, messages, context), agent_loop).result()
+
+        # The judge runs against the AI Gateway endpoint of the active tracking server.
+        scorers: list[Scorer] = build_scorers_list(config)
+        mlflow.genai.evaluate(data=data, predict_fn=predict_fn, scorers=scorers)
+
+
 def mlflow_evaluate(
     config: MlflowEvaluationConfig,
     agent_args: AgentCommandLineArguments,
@@ -65,30 +91,29 @@ def mlflow_evaluate(
     """Evaluate the agent against the MLflow dataset named by the config using its guidelines."""
     _apply_harness_env(config.harness)
     mlflow.set_tracking_uri(os.environ["MLFLOW_SERVER_URI"].rstrip("/"))
-    experiment = mlflow.set_experiment(config.experiment_name)
-    # The run is started explicitly so its name is ours; genai.evaluate reuses the active run.
-    with mlflow.start_run(run_name=_run_name()):
-        dataset = _find_dataset(mlflow.MlflowClient(), experiment.experiment_id, config.dataset_name)
+    # MLflow's evaluation harness runs each record on its own short-lived event loop, but
+    # the agent's async model client caches a connection pool bound to the loop it first
+    # runs on; reusing that pool from a closed loop raises `RuntimeError: Event loop is
+    # closed`. So every agent call is driven by one dedicated, long-lived loop instead.
+    agent_loop = asyncio.new_event_loop()
+    loop_thread = threading.Thread(target=agent_loop.run_forever, daemon=True)
+    loop_thread.start()
+    # The agent must be created on the same event loop on which it is invoked, so
+    # create it on the dedicated agent loop.
+    agent = asyncio.run_coroutine_threadsafe(create_agent(agent_args, config_mutations_hook), agent_loop).result()
 
-        data = [
-            {"inputs": record.inputs, "expectations": record.expectations}
-            for record in dataset.records
-            if record.expectations
-        ]
+    async def _evaluate() -> None:
+        # Exiting the agent context releases its async resources before the loop is
+        # stopped, so no background task is left pending at interpreter exit.
+        async with agent:
+            # The harness blocks, so run it in a worker thread to keep the agent loop
+            # free to service the agent calls the harness dispatches to it. The loop is
+            # passed so those calls are dispatched to the same loop the agent was created on.
+            await asyncio.to_thread(_run_mlflow_harness, config, agent, agent_loop)
 
-        # MLflow's evaluation harness runs each record on its own short-lived event loop, but
-        # the agent's async model client caches a connection pool bound to the loop it first
-        # runs on; reusing that pool from a closed loop raises `RuntimeError: Event loop is
-        # closed`. So every agent call is driven by one dedicated, long-lived loop instead.
-        agent_loop = asyncio.new_event_loop()
-        threading.Thread(target=agent_loop.run_forever, daemon=True).start()
-        # The checkpointer binds to the loop it is built on, so build the agent on the same loop.
-        agent = asyncio.run_coroutine_threadsafe(create_agent(agent_args, config_mutations_hook), agent_loop).result()
-
-        def predict_fn(messages: list[dict[str, str]], context: dict[str, str]) -> str:
-            """Run one agent turn for a dataset record and return the final response text."""
-            return asyncio.run_coroutine_threadsafe(_predict_fn_for(agent, messages, context), agent_loop).result()
-
-        # The judge runs against the AI Gateway endpoint of the active tracking server.
-        scorers: list[Scorer] = build_scorers_list(config)
-        mlflow.genai.evaluate(data=data, predict_fn=predict_fn, scorers=scorers)
+    asyncio.run_coroutine_threadsafe(_evaluate(), agent_loop).result()
+    # Stop the dedicated agent loop, which otherwise keeps running in its daemon thread;
+    # `call_soon_threadsafe` because the loop may only be stopped from its own thread.
+    agent_loop.call_soon_threadsafe(agent_loop.stop)
+    # Wait for the loop thread to terminate so the process exits with everything shut down.
+    loop_thread.join()

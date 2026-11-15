@@ -58,12 +58,13 @@ def phoenix_evaluate(
 
         client = AsyncClient(base_url=os.environ[PHOENIX_SERVER_URI_ENV].rstrip("/"))
         dataset = await client.datasets.get_dataset(dataset=config.dataset_name)
-        await client.experiments.run_experiment(
-            dataset=dataset,
-            task=task,
-            evaluators=evaluators,
-            experiment_name=_run_name(),
-            **extra,
-        )
+        async with agent:
+            await client.experiments.run_experiment(
+                dataset=dataset,
+                task=task,
+                evaluators=evaluators,
+                experiment_name=_run_name(),
+                **extra,
+            )
 
     asyncio.run(run())

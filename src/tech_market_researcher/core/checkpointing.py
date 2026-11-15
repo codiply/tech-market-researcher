@@ -1,5 +1,6 @@
 """Checkpointer factories."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any, cast
 from urllib.parse import quote
 
@@ -18,7 +19,23 @@ from tech_market_researcher.core.configuration import (
 from tech_market_researcher.core.constants import POSTGRES_SCHEMA_NAME_PATTERN
 
 
-async def get_checkpointer(config: CheckpointerConfig) -> BaseCheckpointSaver:
+class CloseableCheckpointerWrapper:  # pylint: disable=too-few-public-methods
+    """A checkpointer wrapper that adds `close()` for releasing the backend's resources."""
+
+    def __init__(self, checkpointer: BaseCheckpointSaver[Any], close: Callable[[], Awaitable[None]]) -> None:
+        self.checkpointer = checkpointer
+        self._close = close
+
+    async def close(self) -> None:
+        """Release the backend's resources. A no-op for backends that hold nothing."""
+        await self._close()
+
+
+async def _noop_close() -> None:
+    pass
+
+
+async def get_checkpointer(config: CheckpointerConfig) -> CloseableCheckpointerWrapper:
     """Create the checkpointer selected by the config.
 
     Must be awaited on the event loop the agent is run on: the postgres backend
@@ -26,7 +43,7 @@ async def get_checkpointer(config: CheckpointerConfig) -> BaseCheckpointSaver:
     """
     match config.backend:
         case CheckpointerBackend.MEMORY:
-            return MemorySaver()
+            return CloseableCheckpointerWrapper(MemorySaver(), _noop_close)
         case CheckpointerBackend.POSTGRES:
             assert config.postgres is not None
             return await _create_postgres_saver(config.postgres)
@@ -38,8 +55,8 @@ def _build_postgres_connection_info(config: PostgresCheckpointerConfig) -> str:
     return f"postgresql://{config.db_user}:{password}@{config.host}:{config.port}/{config.db_name}"
 
 
-async def _create_postgres_saver(config: PostgresCheckpointerConfig) -> AsyncPostgresSaver:
-    """Create an AsyncPostgresSaver over a connection pool, creating the schema and tables if missing.
+async def _create_postgres_saver(config: PostgresCheckpointerConfig) -> CloseableCheckpointerWrapper:
+    """Create a checkpointer over a connection pool, creating the schema and tables if missing.
 
     The checkpoint tables live in the configured schema: the pool's connections get a
     search_path pointing at it, so the checkpointer's unqualified table names resolve there.
@@ -66,6 +83,10 @@ async def _create_postgres_saver(config: PostgresCheckpointerConfig) -> AsyncPos
         open=False,
     )
     await pool.open()
-    saver = AsyncPostgresSaver(cast(AsyncConnectionPool[AsyncConnection[dict[str, Any]]], pool))
-    await saver.setup()
-    return saver
+    checkpointer = AsyncPostgresSaver(cast(AsyncConnectionPool[AsyncConnection[dict[str, Any]]], pool))
+    await checkpointer.setup()
+
+    async def close_pool() -> None:
+        await pool.close()
+
+    return CloseableCheckpointerWrapper(checkpointer, close_pool)
