@@ -35,13 +35,14 @@ async def _chat(args: CliCommandLineArguments) -> None:
     context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
     console.print(f"[dim]Runtime context:\n{context.model_dump_json(indent=2)}[/]")
 
+    console.print("Chat with the agent. Type 'exit' to quit.")
+
     # Replay the stored conversation for this session, if any.
     for message in await agent.get_messages(context):
         if message.type == "human":
             console.print(f"[bold red]you> [/bold red]{message.content}")
         elif message.type == "ai":
             console.print(f"[bold cyan]agent>[/bold cyan] {message.content}")
-    console.print("Chat with the agent. Type 'exit' to quit.")
     while True:
         user_input = console.input("[bold red]you> [/bold red]").strip()
         if user_input.lower() in {"exit", "quit"}:

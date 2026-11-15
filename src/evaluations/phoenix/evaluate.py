@@ -37,7 +37,7 @@ def _run_name() -> str:
 def phoenix_evaluate(
     config: PhoenixEvaluationConfig,
     agent_args: AgentCommandLineArguments,
-    config_mutations_hook: Callable[[ApplicationConfig], None],
+    config_mutations_hooks: list[Callable[[ApplicationConfig], None]],
 ) -> None:
     """Evaluate the agent against the Phoenix dataset named by the config using its evaluators."""
     evaluators = build_evaluators_list(config)
@@ -50,7 +50,7 @@ def phoenix_evaluate(
 
     async def run() -> None:
         # The checkpointer binds to the loop it is built on, so build the agent on the same loop.
-        agent = await create_agent(agent_args, config_mutations_hook)
+        agent = await create_agent(agent_args, config_mutations_hooks)
 
         async def task(record_input: Mapping[str, Any]) -> str:
             """Run one agent turn for a dataset record and return the final response text."""

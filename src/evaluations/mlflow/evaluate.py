@@ -86,7 +86,7 @@ def _run_mlflow_harness(
 def mlflow_evaluate(
     config: MlflowEvaluationConfig,
     agent_args: AgentCommandLineArguments,
-    config_mutations_hook: Callable[[ApplicationConfig], None],
+    config_mutations_hooks: list[Callable[[ApplicationConfig], None]],
 ) -> None:
     """Evaluate the agent against the MLflow dataset named by the config using its guidelines."""
     _apply_harness_env(config.harness)
@@ -100,7 +100,7 @@ def mlflow_evaluate(
     loop_thread.start()
     # The agent must be created on the same event loop on which it is invoked, so
     # create it on the dedicated agent loop.
-    agent = asyncio.run_coroutine_threadsafe(create_agent(agent_args, config_mutations_hook), agent_loop).result()
+    agent = asyncio.run_coroutine_threadsafe(create_agent(agent_args, config_mutations_hooks), agent_loop).result()
 
     async def _evaluate() -> None:
         # Exiting the agent context releases its async resources before the loop is

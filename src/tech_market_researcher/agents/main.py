@@ -66,19 +66,29 @@ class TechMarketResearcherAgent:
         return state.values.get("messages", [])
 
 
+def _apply_config_mutations(
+    config: ApplicationConfig,
+    hooks: list[Callable[[ApplicationConfig], None]] | None,
+) -> ApplicationConfig:
+    """Apply the config mutation hooks in place, then re-validate the mutated config."""
+    for hook in hooks or ():
+        hook(config)
+    return ApplicationConfig.model_validate(config)
+
+
 async def create_agent(
     args: AgentCommandLineArguments,
-    config_mutations_hook: Callable[[ApplicationConfig], None] | None = None,
+    config_mutations_hooks: list[Callable[[ApplicationConfig], None]] | None = None,
 ) -> TechMarketResearcherAgent:
     """Create the supervisor agent from the loaded config named by args.
 
-    If given, config_mutations_hook mutates the loaded config in place before the agent is built.
-    The returned agent is an async context manager: entering it binds the agent to the current
-    event loop, and exiting it releases the agent's async resources (e.g. the connection pool).
+    If given, the hooks in config_mutations_hooks mutate the loaded config in place before the
+    agent is built. The returned agent is an async context manager: entering it binds the agent
+    to the current event loop, and exiting it releases the agent's async resources (e.g. the
+    connection pool).
     """
     config = load_config(args.config_name)
-    if config_mutations_hook is not None:
-        config_mutations_hook(config)
+    config = _apply_config_mutations(config, config_mutations_hooks)
     setup_observability(config.observability, config.environment)
     model_connection = config.get_model_connection_details(config.supervisor.model)
     model = ChatOpenAI(
