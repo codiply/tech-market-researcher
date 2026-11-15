@@ -4,7 +4,7 @@
 
 ## Design
 
-See [design.md](documentation/design.md) for the design and architecture diagrams.
+See [design.md](documentation/design.md) for the design and architecture diagrams, and [models.md](documentation/models.md) for the models exposed through the AI Gateway.
 
 ## Start
 

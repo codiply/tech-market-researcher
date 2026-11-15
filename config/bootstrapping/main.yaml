@@ -26,6 +26,13 @@ mlflow:
     - name: bedrock.eu.amazon.nova-pro-v1
       model_name: eu.amazon.nova-pro-v1:0
       api_key_name: bedrock-eu
+    # Embedding models
+    - name: omlx.embeddinggemma-2-4bit
+      model_name: embeddinggemma-2-4bit
+      api_key_name: omlx-server
+    - name: omlx.Qwen3-Embedding-0.6B-4bit-DWQ
+      model_name: Qwen3-Embedding-0.6B-4bit-DWQ
+      api_key_name: omlx-server
   budget_policies:
     - amount_usd: 30.00
       reset_period: weekly
