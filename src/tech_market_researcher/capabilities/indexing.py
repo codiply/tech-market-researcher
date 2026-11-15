@@ -1,9 +1,10 @@
-"""Agent tools for the web page index: upserting pages and querying them."""
+"""Agent tools for a document index: upserting documents and querying them."""
 
 import uuid
-from typing import Annotated
+from typing import Any
 
 from langchain_core.tools import BaseTool, StructuredTool
+from pydantic import BaseModel, Field, create_model
 
 from tech_market_researcher.integrations.chroma import (
     ChromaDocument,
@@ -17,62 +18,118 @@ INDEXING_TOOL_NAME_UPSERT_SUFFIX = "index_upsert"
 INDEXING_TOOL_NAME_QUERY_SUFFIX = "index_query"
 QUERY_INDEX_MAX_RESULTS_DEFAULT = 5
 QUERY_INDEX_MAX_RESULTS_MAX = 25
+METADATA_PARAMETER_NAME_PREFIX = "metadata_"
 
 
-async def build_indexing_tools(
+class MetadataParameter(BaseModel):
+    """A metadata field of the collection, exposed as a dedicated upsert tool parameter."""
+
+    name: str
+    description: str
+
+
+class IndexToolsParams(BaseModel):
+    """Parameters for building the index tools for a collection."""
+
+    collection_name: str
+    embedding_model_name: str
+    tool_name_prefix: str
+    collection_description: str
+    metadata_parameters: list[MetadataParameter] | None = None
+
+
+def _build_upsert_args_model(parameters: list[MetadataParameter]) -> type[BaseModel]:
+    """Build the upsert tool args schema, adding one optional str field per metadata parameter."""
+    metadata_fields: dict[str, Any] = {
+        f"{METADATA_PARAMETER_NAME_PREFIX}{p.name}": (str | None, Field(default=None, description=p.description))
+        for p in parameters
+    }
+    return create_model(
+        "IndexUpsertArgs",
+        document=(str, Field(description="The document text to index")),
+        document_id=(
+            str | None,
+            Field(default=None, description="Optional explicit record ID; a UUID is generated when omitted"),
+        ),
+        **metadata_fields,
+    )
+
+
+def _metadata_arg_lines(parameters: list[MetadataParameter]) -> list[str]:
+    return [f"    {METADATA_PARAMETER_NAME_PREFIX}{p.name}: {p.description}" for p in parameters]
+
+
+async def build_index_tools(
     chroma_client,
-    collection_name: str,
-    embedding_model_name: str,
-    tool_name_prefix: str,
+    params: IndexToolsParams,
 ) -> list[BaseTool]:
     """Return the index upsert and query tools for the named Chroma collection.
 
     The tool names are the prefix (a trailing underscore is added if missing)
     followed by the upsert/query suffixes. The collection is fetched (or
-    created) up front."""
+    created) up front. The collection description is injected into the
+    docstrings of the generated tools. Each metadata parameter is exposed as
+    a dedicated optional `metadata_<name>` argument of the upsert tool whose
+    value is stored under the parameter's name in the record's metadata."""
+    parameters = params.metadata_parameters or []
+    tool_name_prefix = params.tool_name_prefix
     if not tool_name_prefix.endswith("_"):
         tool_name_prefix += "_"
     collection = await get_or_create_collection(
         chroma_client,
-        collection_name,
-        embedding_model_name,
+        params.collection_name,
+        params.embedding_model_name,
         EmbeddingModelMismatchBehavior.RAISE,
     )
 
-    async def upsert_web_page_index(
-        document: str,
-        document_id: Annotated[str | None, "Optional explicit ID; a UUID is generated when omitted"] = None,
-        metadata: Annotated[
-            dict[str, str | int | float | bool] | None, "Optional metadata to store with the document"
-        ] = None,
-    ) -> str:
-        """Add a document to the web page index, replacing any existing record with the same ID.
+    upsert_docstring = "\n".join(
+        [
+            f"Add a document to the {params.collection_name} collection, "
+            "replacing any existing record with the same ID.",
+            "",
+            "About this collection:",
+            params.collection_description,
+            "",
+            "Args:",
+            "    document: The document text to index",
+            "    document_id: Optional explicit record ID; a UUID is generated when omitted",
+            *_metadata_arg_lines(parameters),
+            "",
+            "Returns:",
+            "    The ID of the stored record",
+        ]
+    )
 
-        Args:
-            document: The document text to index
-            document_id: Optional explicit record ID; a UUID is generated when omitted
-            metadata: Optional metadata to store with the document
+    query_docstring = "\n".join(
+        [
+            f"Retrieve the documents most relevant to a query from the {params.collection_name} collection.",
+            "",
+            "About this collection:",
+            params.collection_description,
+            "",
+            "Args:",
+            "    query: Search query to execute",
+            "    max_results: Maximum number of results to return (max 25, default: 5)",
+            "",
+            "Returns:",
+            "    Numbered documents with ID and distance",
+        ]
+    )
 
-        Returns:
-            The ID of the stored record
-        """
+    async def upsert_index(document: str, document_id: str | None = None, **metadata_fields: str) -> str:
+        metadata: dict[str, str | int | float | bool] = {}
+        for parameter in parameters:
+            value = metadata_fields.get(f"{METADATA_PARAMETER_NAME_PREFIX}{parameter.name}")
+            if value is not None:
+                metadata[parameter.name] = value
         record_id = document_id or str(uuid.uuid4())
-        await upsert_documents(collection, [ChromaDocument(id=record_id, document=document, metadata=metadata or {})])
+        await upsert_documents(collection, [ChromaDocument(id=record_id, document=document, metadata=metadata)])
         return f"Stored document with id {record_id}"
 
-    async def query_web_page_index(
+    async def query_index(
         query: str,
         max_results: int = QUERY_INDEX_MAX_RESULTS_DEFAULT,
     ) -> str:
-        """Retrieve the documents most relevant to a query from the web page index.
-
-        Args:
-            query: Search query to execute
-            max_results: Maximum number of results to return (max 25, default: 5)
-
-        Returns:
-            Numbered documents with ID and distance
-        """
         effective_max_results = min(max_results, QUERY_INDEX_MAX_RESULTS_MAX)
         result = await chroma_query(collection, query, n_results=effective_max_results)
         items = result.items[0]
@@ -84,13 +141,14 @@ async def build_indexing_tools(
         return f"Found {len(items)} result(s) for '{query}':\n\n" + "\n\n".join(result_texts)
 
     upsert_tool = StructuredTool.from_function(
-        coroutine=upsert_web_page_index,
+        coroutine=upsert_index,
         name=f"{tool_name_prefix}{INDEXING_TOOL_NAME_UPSERT_SUFFIX}",
-        description=upsert_web_page_index.__doc__,
+        description=upsert_docstring,
+        args_schema=_build_upsert_args_model(parameters),
     )
     query_tool = StructuredTool.from_function(
-        coroutine=query_web_page_index,
+        coroutine=query_index,
         name=f"{tool_name_prefix}{INDEXING_TOOL_NAME_QUERY_SUFFIX}",
-        description=query_web_page_index.__doc__,
+        description=query_docstring,
     )
     return [upsert_tool, query_tool]
