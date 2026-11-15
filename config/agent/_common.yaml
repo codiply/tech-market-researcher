@@ -8,7 +8,14 @@ supervisor:
     provider: mlflow_gateway
     name: omlx.Qwen3.8-27B-oQ4e-mtp
   checkpointer:
-    backend: memory
+    backend: postgres
+    postgres:
+      host: localhost
+      port: 5435
+      db_name: agent
+      db_user: agent
+      db_password_env_var_name: AGENT_DB_PASSWORD
+      schema_name: checkpoints
   capabilities:
     runtime_context_debugger:
       enabled: true

@@ -31,7 +31,7 @@ def main() -> None:
 
 async def _chat(args: CliCommandLineArguments) -> None:
     """Run the interactive chat REPL on a single event loop."""
-    agent = create_agent(args)
+    agent = await create_agent(args)
     context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
     console.print(f"[dim]Runtime context:\n{context.model_dump_json(indent=2)}[/]")
 

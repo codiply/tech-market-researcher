@@ -21,7 +21,7 @@ from textual.containers import Horizontal
 from textual.widgets import Button, Footer, Header, Input, OptionList
 from textual_serve.server import Server
 
-from tech_market_researcher.agents.main import create_agent
+from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
 from tech_market_researcher.core.arguments import AgentCommandLineArguments, get_args
 from tech_market_researcher.core.common import AgentRuntimeContext, BasePydanticModel
 from tech_market_researcher.core.constants import (
@@ -105,9 +105,9 @@ class ChatApp(App):
     def __init__(self) -> None:
         super().__init__()
         # Each browser session spawns this app in its own subprocess, so the
-        # agent is built here, per session, from the loaded config.
-        args = get_args(AgentCommandLineArguments)
-        self._agent = create_agent(args)
+        # agent is built per session, from the loaded config, when the app mounts.
+        self._args = get_args(AgentCommandLineArguments)
+        self._agent: TechMarketResearcherAgent | None = None
         self._chat_context = ChatBotContext(
             user_id=DEFAULT_USER_ID, session_id=DEFAULT_SESSION_ID, time_zone=DEFAULT_TIME_ZONE
         )
@@ -119,7 +119,7 @@ class ChatApp(App):
         self._agent_thread = threading.Thread(target=self._agent_loop.run_forever, daemon=True)
         self._agent_thread.start()
 
-    def _agent_result(self, coro: Coroutine[Any, Any, Any]) -> Any:
+    def _run_on_agent_loop(self, coro: Coroutine[Any, Any, Any]) -> Any:
         """Run a coroutine on the agent's event loop, blocking this thread until it returns."""
         return asyncio.run_coroutine_threadsafe(coro, self._agent_loop).result()
 
@@ -143,9 +143,11 @@ class ChatApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        """Focus the composer and restore the conversation persisted for the default session."""
+        """Focus the composer, build the agent, and restore the conversation persisted for the default session."""
+        # Build the agent on the agent loop: the agent's async components bind to the loop they are created on.
+        self._agent = self._run_on_agent_loop(create_agent(self._args))
         self.query_one("#message", Input).focus()
-        self._refresh_messages(self._agent_result(self._agent.get_messages(self.runtime_context)))
+        self._refresh_messages(self._run_on_agent_loop(self._agent.get_messages(self.runtime_context)))
 
     def _message_input(self) -> Input:
         """The composer input."""
@@ -184,7 +186,8 @@ class ChatApp(App):
             session_id=self.query_one("#session-id", Input).value,
             time_zone=self.query_one("#time-zone", Input).value,
         )
-        self._refresh_messages(self._agent_result(self._agent.get_messages(self.runtime_context)))
+        assert self._agent is not None  # Created in on_mount, which always runs before user input.
+        self._refresh_messages(self._run_on_agent_loop(self._agent.get_messages(self.runtime_context)))
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Submit when Enter is pressed in the composer."""
@@ -202,9 +205,11 @@ class ChatApp(App):
     def _run_turn(self, message: str) -> None:
         """Run one turn of the conversation in a background thread so the UI stays responsive."""
         # The checkpointer resumes the conversation, so only the new turn is passed.
+        agent = self._agent
+        assert agent is not None  # Created in on_mount, which always runs before user input.
         try:
-            result = self._agent_result(
-                self._agent.ainvoke([{"role": "user", "content": message}], context=self.runtime_context)
+            result = self._run_on_agent_loop(
+                agent.ainvoke([{"role": "user", "content": message}], context=self.runtime_context)
             )
         # Surface any failure in the transcript instead of crashing the session.
         except Exception as error:  # pylint: disable=broad-exception-caught

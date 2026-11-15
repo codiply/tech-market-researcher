@@ -47,13 +47,15 @@ class TechMarketResearcherAgent:
         return state.values.get("messages", [])
 
 
-def create_agent(
+async def create_agent(
     args: AgentCommandLineArguments,
     config_mutations_hook: Callable[[ApplicationConfig], None] | None = None,
 ) -> TechMarketResearcherAgent:
     """Create the supervisor agent from the loaded config named by args.
 
     If given, config_mutations_hook mutates the loaded config in place before the agent is built.
+    Must be awaited on the same event loop on which the returned agent is invoked,
+    and that loop must outlive the agent; the agent's async components are bound to it.
     """
     config = load_config(args.config_name)
     if config_mutations_hook is not None:
@@ -72,6 +74,6 @@ def create_agent(
         tools=build_tool_list(capabilities),
         middleware=build_middleware_list(capabilities),
         context_schema=AgentRuntimeContext,
-        checkpointer=get_checkpointer(config.supervisor.checkpointer),
+        checkpointer=await get_checkpointer(config.supervisor.checkpointer),
     )
     return TechMarketResearcherAgent(agent, config.environment)

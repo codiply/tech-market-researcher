@@ -9,7 +9,8 @@ description: "Find and action AGENT_TODO: markers in the codebase, treating each
 
 ## Steps
 
-1. Find all markers: `rg -n "AGENT_TODO:" --no-ignore --hidden -g '!.venv' -g '!.git' -g '!.mypy_cache' -g '!.pytest_cache' -g '!.agents/skills/fix-agent-todos'`
+1. Find all markers: `rg -n "AGENT(S)?_TODO:" --no-ignore --hidden -g '!.venv' -g '!.git' -g '!.mypy_cache' -g '!.pytest_cache' -g '!.agents/skills/fix-agent-todos'`
+   - `AGENT(S)?_TODO` also catches misspelled `AGENTS_TODO:` markers.
    - `--hidden` is needed so dot-directories (e.g. `.agents`, `.github`) are searched; `--no-ignore` alone does not cover them.
    - If none are found, tell the user there are no pending AGENT_TODOs and stop.
 2. Group the markers by file. For each marker, read enough surrounding context to understand the instruction.

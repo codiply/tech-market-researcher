@@ -14,7 +14,7 @@ load_dotenv()
 import gradio as gr
 from langchain_core.messages import BaseMessage
 
-from tech_market_researcher.agents.main import create_agent
+from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
 from tech_market_researcher.core.arguments import AgentCommandLineArguments, get_args
 from tech_market_researcher.core.common import AgentRuntimeContext, BasePydanticModel
 from tech_market_researcher.core.constants import DEFAULT_SESSION_ID, DEFAULT_TIME_ZONE, DEFAULT_USER_ID
@@ -111,8 +111,15 @@ def _build_ui(
 def main() -> None:
     """Build and launch the web UI."""
     args = get_args(AgentCommandLineArguments)
-    agent = create_agent(args)
     context = ChatBotContext(user_id=DEFAULT_USER_ID, session_id=DEFAULT_SESSION_ID, time_zone=DEFAULT_TIME_ZONE)
+    agent: TechMarketResearcherAgent | None = None
+
+    async def _get_agent() -> TechMarketResearcherAgent:
+        """Create the agent lazily, on the event loop the handlers run on."""
+        nonlocal agent
+        if agent is None:
+            agent = await create_agent(args)
+        return agent
 
     async def load_chatbot() -> tuple[list[dict[str, str]], str, str, str, dict[str, Any]]:
         """Restore the conversation persisted in the checkpointer, if any.
@@ -121,6 +128,7 @@ def main() -> None:
         session that is currently active on the server, and disables the submit
         button (the textbox starts empty).
         """
+        agent = await _get_agent()
         return (
             _to_chat_items(await agent.get_messages(context.to_agent_runtime_context())),
             context.user_id,
@@ -132,6 +140,7 @@ def main() -> None:
     async def apply_context(user_id: str, session_id: str, time_zone: str) -> list[dict[str, str]]:
         """Switch to the given conversation thread and load the messages stored for it."""
         nonlocal context
+        agent = await _get_agent()
         context = ChatBotContext(user_id=user_id, session_id=session_id, time_zone=time_zone)
         return _to_chat_items(await agent.get_messages(context.to_agent_runtime_context()))
 
@@ -145,6 +154,7 @@ def main() -> None:
         Empties the textbox afterwards and keeps the submit button disabled for the
         empty state.
         """
+        agent = await _get_agent()
         agent_runtime = context.to_agent_runtime_context()
         if not message.strip():
             return _to_chat_items(await agent.get_messages(agent_runtime)), "", gr.update(interactive=False)

@@ -84,12 +84,37 @@ class CheckpointerBackend(str, Enum):
     """Available conversation checkpointer backends."""
 
     MEMORY = "memory"
+    POSTGRES = "postgres"
+
+
+class PostgresCheckpointerConfig(BasePydanticModel):
+    """Connection settings for the postgres checkpointer backend."""
+
+    host: str = "localhost"
+    port: int = 5435
+    db_name: str = "agent"
+    db_user: str = "agent"
+    db_password_env_var_name: str = "AGENT_DB_PASSWORD"
+    # Schema that holds the checkpoint tables; other features can use their own schemas.
+    schema_name: str = "checkpoints"
+
+    @property
+    def db_password(self) -> SecretStr:
+        """Database password from the env var db_password_env_var_name."""
+        return SecretStr(os.environ[self.db_password_env_var_name])
 
 
 class CheckpointerConfig(BasePydanticModel):
     """Conversation checkpointer settings. Omit the section to use the memory backend."""
 
     backend: CheckpointerBackend = CheckpointerBackend.MEMORY
+    postgres: PostgresCheckpointerConfig | None = None
+
+    @model_validator(mode="after")
+    def _check_postgres(self) -> "CheckpointerConfig":
+        if self.backend is CheckpointerBackend.POSTGRES and self.postgres is None:
+            raise ValueError("the postgres section is required when the backend is postgres.")
+        return self
 
 
 class CapabilitiesConfig(BasePydanticModel):

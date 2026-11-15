@@ -13,7 +13,6 @@ from evaluations.mlflow.configuration import load_config as load_mlflow_config
 from evaluations.mlflow.evaluate import mlflow_evaluate
 from evaluations.phoenix.configuration import load_config as load_phoenix_config
 from evaluations.phoenix.evaluate import phoenix_evaluate
-from tech_market_researcher.agents.main import create_agent
 from tech_market_researcher.core.configuration import ApplicationConfig
 
 # pylint: enable=wrong-import-position
@@ -28,13 +27,14 @@ def _update_config(config: ApplicationConfig) -> None:
 def main() -> None:
     """Entry point for the evaluations CLI."""
     eval_args = get_args(EvalsCommandLineArguments)
-    agent = create_agent(eval_args.as_agent_args(), config_mutations_hook=_update_config)
+    # The agent is created by the platform runner, on the event loop it runs the agent on.
+    agent_args = eval_args.as_agent_args()
     if eval_args.platform == EvalsPlatform.MLLFLOW:
         mlflow_config = load_mlflow_config(eval_args.evals_config_name)
-        mlflow_evaluate(mlflow_config, agent)
+        mlflow_evaluate(mlflow_config, agent_args, _update_config)
     elif eval_args.platform == EvalsPlatform.PHOENIX:
         phoenix_config = load_phoenix_config(eval_args.evals_config_name)
-        phoenix_evaluate(phoenix_config, agent)
+        phoenix_evaluate(phoenix_config, agent_args, _update_config)
     else:
         raise NotImplementedError(f"Platform '{eval_args.platform.value}' is not implemented yet.")
 

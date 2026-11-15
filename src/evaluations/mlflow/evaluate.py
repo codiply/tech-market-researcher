@@ -3,6 +3,7 @@
 import asyncio
 import os
 import threading
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 import mlflow
@@ -12,7 +13,9 @@ from evaluations.common.constants import EVALS_RUN_NAME_PREFIX
 from evaluations.common.runtime_context import build_runtime_context
 from evaluations.mlflow.configuration import HarnessConfig, MlflowEvaluationConfig
 from evaluations.mlflow.scorers import build_scorers_list
-from tech_market_researcher.agents.main import TechMarketResearcherAgent
+from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
+from tech_market_researcher.core.arguments import AgentCommandLineArguments
+from tech_market_researcher.core.configuration import ApplicationConfig
 
 
 def _find_dataset(client: mlflow.MlflowClient, experiment_id: str, name: str):
@@ -54,7 +57,11 @@ def _apply_harness_env(harness: HarnessConfig) -> None:
             os.environ[name] = str(value)
 
 
-def mlflow_evaluate(config: MlflowEvaluationConfig, agent: TechMarketResearcherAgent) -> None:
+def mlflow_evaluate(
+    config: MlflowEvaluationConfig,
+    agent_args: AgentCommandLineArguments,
+    config_mutations_hook: Callable[[ApplicationConfig], None],
+) -> None:
     """Evaluate the agent against the MLflow dataset named by the config using its guidelines."""
     _apply_harness_env(config.harness)
     mlflow.set_tracking_uri(os.environ["MLFLOW_SERVER_URI"].rstrip("/"))
@@ -75,6 +82,8 @@ def mlflow_evaluate(config: MlflowEvaluationConfig, agent: TechMarketResearcherA
         # closed`. So every agent call is driven by one dedicated, long-lived loop instead.
         agent_loop = asyncio.new_event_loop()
         threading.Thread(target=agent_loop.run_forever, daemon=True).start()
+        # The checkpointer binds to the loop it is built on, so build the agent on the same loop.
+        agent = asyncio.run_coroutine_threadsafe(create_agent(agent_args, config_mutations_hook), agent_loop).result()
 
         def predict_fn(messages: list[dict[str, str]], context: dict[str, str]) -> str:
             """Run one agent turn for a dataset record and return the final response text."""
