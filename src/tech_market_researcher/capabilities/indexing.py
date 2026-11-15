@@ -7,7 +7,7 @@ from langchain_core.tools import BaseTool, StructuredTool
 
 from tech_market_researcher.integrations.chroma import (
     ChromaDocument,
-    EmbeddingModelMismatchBehaviour,
+    EmbeddingModelMismatchBehavior,
     get_or_create_collection,
 )
 from tech_market_researcher.integrations.chroma import query as chroma_query
@@ -36,7 +36,7 @@ async def build_indexing_tools(
         chroma_client,
         collection_name,
         embedding_model_name,
-        EmbeddingModelMismatchBehaviour.RAISE,
+        EmbeddingModelMismatchBehavior.RAISE,
     )
 
     async def upsert_web_page_index(

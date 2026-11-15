@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import cast
 from urllib.parse import urlsplit
@@ -18,16 +19,18 @@ from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
-EMBEDDINGS_MODEL_NAME_METADATA_KEY = "embeddings_model_name"
+EMBEDDINGS_MODEL_NAME_METADATA_KEY = "_embeddings_model_name"
+
+EMBEDDINGS_COMPUTED_AT_METADATA_KEY = "_embeddings_computed_at"
 
 DEFAULT_QUERY_N_RESULTS = 10
 
 
-class EmbeddingModelMismatchBehaviour(StrEnum):
+class EmbeddingModelMismatchBehavior(StrEnum):
     """What to do when an existing collection was created with a different embeddings model."""
 
     RAISE = "raise"
-    RECOMPUTE = "recompute"
+    MIGRATE = "migrate"
 
 
 class ChromaDocument(BaseModel):
@@ -80,7 +83,7 @@ async def _get_collection(client: AsyncClientAPI, name: str) -> AsyncCollection 
 
 
 async def get_or_create_collection(
-    client: AsyncClientAPI, name: str, embeddings_model_name: str, mismatch_behaviour: EmbeddingModelMismatchBehaviour
+    client: AsyncClientAPI, name: str, embeddings_model_name: str, mismatch_behavior: EmbeddingModelMismatchBehavior
 ) -> AsyncCollection:
     """Fetch a collection by name, creating it if it does not exist.
 
@@ -92,14 +95,14 @@ async def get_or_create_collection(
     if collection is not None:
         existing_model = collection.metadata.get(EMBEDDINGS_MODEL_NAME_METADATA_KEY)
         if existing_model != embeddings_model_name:
-            if mismatch_behaviour == EmbeddingModelMismatchBehaviour.RAISE:
+            if mismatch_behavior == EmbeddingModelMismatchBehavior.RAISE:
                 raise ValueError(
                     f"collection '{name}' was created with embeddings model {existing_model!r}, "
                     f"but {embeddings_model_name!r} was requested"
                 )
-            if mismatch_behaviour == EmbeddingModelMismatchBehaviour.RECOMPUTE:
+            if mismatch_behavior == EmbeddingModelMismatchBehavior.MIGRATE:
                 raise NotImplementedError
-            raise ValueError(f"unknown mismatch behaviour: {mismatch_behaviour!r}")
+            raise ValueError(f"unknown mismatch behavior: {mismatch_behavior!r}")
         return collection
     # Chroma expects an embedding function over the wider CollectionInput type; we only ever pass documents.
     return await client.create_collection(
@@ -121,7 +124,17 @@ async def upsert_documents(collection: AsyncCollection, documents: Sequence[Chro
 
     Records whose ID already exist are replaced; new IDs are inserted.
     """
-    metadatas: list[Metadata] = [document.metadata for document in documents]
+    # Record which model produced the embeddings and when, so staleness can be detected.
+    model_name = collection.metadata.get(EMBEDDINGS_MODEL_NAME_METADATA_KEY)
+    computed_at = datetime.now(timezone.utc).isoformat()
+    metadatas: list[Metadata] = [
+        {
+            **document.metadata,
+            EMBEDDINGS_MODEL_NAME_METADATA_KEY: model_name,
+            EMBEDDINGS_COMPUTED_AT_METADATA_KEY: computed_at,
+        }
+        for document in documents
+    ]
     await collection.upsert(
         ids=[document.id for document in documents],
         documents=[document.document for document in documents],
