@@ -10,6 +10,7 @@ from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field, create_model, model_validator
 
 from tech_market_researcher.capabilities.chunking import get_token_encoder, split_text_into_chunks
+from tech_market_researcher.core.configuration import ModelConnectionDetails
 from tech_market_researcher.integrations.chroma import (
     ChromaDocument,
     EmbeddingModelMismatchBehavior,
@@ -48,7 +49,7 @@ class IndexToolsParams(BaseModel):
     is_document_id_required: bool = False
     document_id_description: str = "Optional explicit record ID; a UUID is generated when omitted"
     metadata_parameters: list[MetadataParameter] | None = None
-    embedding_model_name: str
+    embeddings_model: ModelConnectionDetails
     document_fetcher: Callable[[str], str | Awaitable[str]] | None = None
     chunk_size_tokens: int | None = None
     chunk_overlap_tokens: int = 50
@@ -183,7 +184,7 @@ async def build_index_tools(
     collection = await get_or_create_collection(
         chroma_client,
         params.collection_name,
-        params.embedding_model_name,
+        params.embeddings_model,
         EmbeddingModelMismatchBehavior.RAISE,
     )
     token_encoder = get_token_encoder() if params.chunk_size_tokens is not None else None

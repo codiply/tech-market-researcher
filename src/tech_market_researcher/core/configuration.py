@@ -16,8 +16,23 @@ CONFIG_DIR = Path("config") / "agent"
 class ModelProviderConfig(BasePydanticModel):
     """Connection settings for a model provider."""
 
-    base_url: str
+    base_url: str | None = None
+    base_url_env_var_name: str | None = None
     api_key_env_var_name: str | None = None
+
+    @model_validator(mode="after")
+    def _check_base_url(self) -> "ModelProviderConfig":
+        if (self.base_url is None) == (self.base_url_env_var_name is None):
+            raise ValueError("model provider requires exactly one of base_url or base_url_env_var_name")
+        return self
+
+    @property
+    def resolved_base_url(self) -> str:
+        """Base URL, taken from the literal value or the env var base_url_env_var_name."""
+        if self.base_url is not None:
+            return self.base_url
+        assert self.base_url_env_var_name is not None  # Validated by _check_base_url
+        return os.environ[self.base_url_env_var_name]
 
     @property
     def api_key(self) -> SecretStr:
@@ -89,14 +104,14 @@ class WebPageIndexerConfig(BasePydanticModel):
 
     enabled: bool = False
     collection_name: str | None = None
-    embeddings_model_name: str | None = None
+    embeddings_model: ModelConfig | None = None
     chunk_size_tokens: int = 500
     chunk_overlap_tokens: int = 50
 
     @model_validator(mode="after")
     def _validate_enabled_fields(self) -> "WebPageIndexerConfig":
-        if self.enabled and (self.collection_name is None or self.embeddings_model_name is None):
-            msg = "web_page_indexer requires collection_name and embeddings_model_name when enabled"
+        if self.enabled and (self.collection_name is None or self.embeddings_model is None):
+            msg = "web_page_indexer requires collection_name and embeddings_model when enabled"
             raise ValueError(msg)
         if not 0 <= self.chunk_overlap_tokens < self.chunk_size_tokens:
             msg = "web_page_indexer chunk_overlap_tokens must be less than chunk_size_tokens"
@@ -204,7 +219,7 @@ def resolve_model_connection_details(
         raise ValueError(f"Unknown model provider '{model.provider}'. Available: {available}.")
     return ModelConnectionDetails(
         model_name=model.name,
-        base_url=provider.base_url,
+        base_url=provider.resolved_base_url,
         api_key=provider.api_key,
     )
 

@@ -11,7 +11,7 @@ from tech_market_researcher.capabilities.indexing import IndexToolsParams, Metad
 from tech_market_researcher.capabilities.runtime_context import runtime_context_debugger
 from tech_market_researcher.capabilities.search import get_search_tool
 from tech_market_researcher.capabilities.webpage import fetch_page
-from tech_market_researcher.core.configuration import CapabilitiesConfig
+from tech_market_researcher.core.configuration import ApplicationConfig, CapabilitiesConfig
 from tech_market_researcher.core.webpage import fetch_as_markdown
 from tech_market_researcher.integrations.chroma import get_client
 
@@ -49,21 +49,22 @@ WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION = (
 )
 
 
-async def build_tool_list(config: CapabilitiesConfig) -> list[BaseTool]:
+async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
     """Build the tools list from the capabilities config."""
+    capabilities = config.supervisor.capabilities
     tools = []
-    if config.search.enabled:
-        tools.append(get_search_tool(config.search))
-    if config.fetch_page.enabled:
+    if capabilities.search.enabled:
+        tools.append(get_search_tool(capabilities.search))
+    if capabilities.fetch_page.enabled:
         tools.append(fetch_page)
-    if config.runtime_context_debugger.enabled:
+    if capabilities.runtime_context_debugger.enabled:
         tools.append(runtime_context_debugger)
-    if config.current_datetime.enabled:
+    if capabilities.current_datetime.enabled:
         tools.append(current_datetime)
-    if config.web_page_indexer.enabled:
-        indexer = config.web_page_indexer
+    if capabilities.web_page_indexer.enabled:
+        indexer = capabilities.web_page_indexer
         assert indexer.collection_name is not None  # Validated by WebPageIndexerConfig
-        assert indexer.embeddings_model_name is not None  # Validated by WebPageIndexerConfig
+        assert indexer.embeddings_model is not None  # Validated by WebPageIndexerConfig
         client = await get_client()
         tools.extend(
             await build_index_tools(
@@ -75,7 +76,7 @@ async def build_tool_list(config: CapabilitiesConfig) -> list[BaseTool]:
                     is_document_id_required=True,
                     document_id_description=WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION,
                     metadata_parameters=WEB_PAGE_INDEX_METADATA_PARAMETERS,
-                    embedding_model_name=indexer.embeddings_model_name,
+                    embeddings_model=config.get_model_connection_details(indexer.embeddings_model),
                     document_fetcher=fetch_as_markdown,
                     chunk_size_tokens=indexer.chunk_size_tokens,
                     chunk_overlap_tokens=indexer.chunk_overlap_tokens,

@@ -19,6 +19,8 @@ from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
+from tech_market_researcher.core.configuration import ModelConnectionDetails
+
 EMBEDDINGS_MODEL_NAME_METADATA_KEY = "_embeddings_model_name"
 
 EMBEDDINGS_COMPUTED_AT_METADATA_KEY = "_embeddings_computed_at"
@@ -56,12 +58,6 @@ class ChromaQueryResult(BaseModel):
     items: list[list[QueryResultItem]]
 
 
-# Embeddings come directly from the OMLX server (OpenAI-compatible), configured in env;
-# the AI Gateway does not proxy the /embeddings endpoint.
-_OMLX_BASE_URL_ENV = "OMLX_BASE_URL"
-_OMLX_API_KEY_ENV = "OMLX_API_KEY"
-
-
 def _split_chroma_url() -> tuple[str, int]:
     """Split the CHROMA_URL env var into (host, port), defaulting to localhost:8385."""
     url = os.environ.get("CHROMA_URL", "http://localhost:8385")
@@ -75,16 +71,16 @@ async def get_client() -> AsyncClientAPI:
 
 
 def _build_embedding_function(
-    embeddings_model_name: str,
+    embeddings_model: ModelConnectionDetails,
 ) -> EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]]:
-    """Build the OMLX-backed OpenAIEmbeddingFunction used to embed documents."""
+    """Build an OpenAIEmbeddingFunction backed by the resolved embedding model."""
     # Chroma expects an embedding function over the wider CollectionInput type; we only ever pass documents.
     return cast(
         EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]],
         OpenAIEmbeddingFunction(
-            api_key=os.environ[_OMLX_API_KEY_ENV],
-            api_base=os.environ[_OMLX_BASE_URL_ENV].rstrip("/"),
-            model_name=embeddings_model_name,
+            api_key=embeddings_model.api_key.get_secret_value(),
+            api_base=embeddings_model.base_url.rstrip("/"),
+            model_name=embeddings_model.model_name,
         ),
     )
 
@@ -102,23 +98,26 @@ async def _get_collection(
 
 
 async def get_or_create_collection(
-    client: AsyncClientAPI, name: str, embeddings_model_name: str, mismatch_behavior: EmbeddingModelMismatchBehavior
+    client: AsyncClientAPI,
+    name: str,
+    embeddings_model: ModelConnectionDetails,
+    mismatch_behavior: EmbeddingModelMismatchBehavior,
 ) -> AsyncCollection:
     """Fetch a collection by name, creating it if it does not exist.
 
-    New collections are created with an OpenAIEmbeddingFunction pointing at
-    the OMLX server using the given embedding model, so documents get embedded
-    on add. The model name is recorded in the collection metadata.
+    New collections are created with an OpenAIEmbeddingFunction for the given embedding
+    model, so documents get embedded on add. The model name is recorded in the
+    collection metadata.
     """
-    embedding_function = _build_embedding_function(embeddings_model_name)
+    embedding_function = _build_embedding_function(embeddings_model)
     collection = await _get_collection(client, name, embedding_function)
     if collection is not None:
         existing_model = collection.metadata.get(EMBEDDINGS_MODEL_NAME_METADATA_KEY)
-        if existing_model != embeddings_model_name:
+        if existing_model != embeddings_model.model_name:
             if mismatch_behavior == EmbeddingModelMismatchBehavior.RAISE:
                 raise ValueError(
                     f"collection '{name}' was created with embeddings model {existing_model!r}, "
-                    f"but {embeddings_model_name!r} was requested"
+                    f"but {embeddings_model.model_name!r} was requested"
                 )
             if mismatch_behavior == EmbeddingModelMismatchBehavior.MIGRATE:
                 raise NotImplementedError
@@ -128,7 +127,7 @@ async def get_or_create_collection(
     return await client.create_collection(
         name=name,
         embedding_function=embedding_function,
-        metadata={EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model_name},
+        metadata={EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model.model_name},
     )
 
 

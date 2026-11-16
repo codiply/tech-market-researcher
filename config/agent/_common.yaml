@@ -1,6 +1,9 @@
 model_providers:
   mlflow_gateway:
     base_url: http://localhost:5000/gateway/mlflow/v1
+  omlx:
+    base_url_env_var_name: OMLX_BASE_URL
+    api_key_env_var_name: OMLX_API_KEY
 supervisor:
   system_prompt: |-
     You are a Researcher giving me insights into the Tech Market.
@@ -32,7 +35,9 @@ supervisor:
     web_page_indexer:
       enabled: true
       collection_name: web-page-index
-      embeddings_model_name: Qwen3-Embedding-0.6B-4bit-DWQ
+      embeddings_model:
+        provider: omlx
+        name: Qwen3-Embedding-0.6B-4bit-DWQ
       chunk_size_tokens: 500
       chunk_overlap_tokens: 50
 observability:

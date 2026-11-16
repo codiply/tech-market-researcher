@@ -102,7 +102,7 @@ async def create_agent(
     agent = create_deep_agent(
         model=model,
         system_prompt=config.supervisor.system_prompt,
-        tools=await build_tool_list(capabilities),
+        tools=await build_tool_list(config),
         middleware=build_middleware_list(capabilities),
         context_schema=AgentRuntimeContext,
         checkpointer=checkpointer,
