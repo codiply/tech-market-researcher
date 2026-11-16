@@ -41,6 +41,11 @@ WEB_PAGE_INDEX_METADATA_PARAMETERS = [
         ),
     ),
 ]
+WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION = (
+    "The URL of the web page this record stores. Always use the page's full URL, including the "
+    "scheme (e.g. https://example.com/article), as the ID, so re-fetching the same page replaces "
+    "its previous record instead of duplicating it."
+)
 
 
 async def build_tool_list(config: CapabilitiesConfig) -> list[BaseTool]:
@@ -63,11 +68,13 @@ async def build_tool_list(config: CapabilitiesConfig) -> list[BaseTool]:
             await build_index_tools(
                 client,
                 IndexToolsParams(
-                    collection_name=indexer.collection_name,
-                    embedding_model_name=indexer.embeddings_model_name,
                     tool_name_prefix=WEB_PAGE_INDEX_TOOL_NAME_PREFIX,
+                    collection_name=indexer.collection_name,
                     collection_description=WEB_PAGE_INDEX_COLLECTION_DESCRIPTION,
+                    is_document_id_required=True,
+                    document_id_description=WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION,
                     metadata_parameters=WEB_PAGE_INDEX_METADATA_PARAMETERS,
+                    embedding_model_name=indexer.embeddings_model_name,
                 ),
             )
         )

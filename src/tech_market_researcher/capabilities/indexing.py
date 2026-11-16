@@ -31,26 +31,32 @@ class MetadataParameter(BaseModel):
 class IndexToolsParams(BaseModel):
     """Parameters for building the index tools for a collection."""
 
-    collection_name: str
-    embedding_model_name: str
     tool_name_prefix: str
+    collection_name: str
     collection_description: str
+    document_description: str = "The document text to index"
+    is_document_id_required: bool = False
+    document_id_description: str = "Optional explicit record ID; a UUID is generated when omitted"
     metadata_parameters: list[MetadataParameter] | None = None
+    embedding_model_name: str
 
 
-def _build_upsert_args_model(parameters: list[MetadataParameter]) -> type[BaseModel]:
+def _build_upsert_args_model(params: IndexToolsParams) -> type[BaseModel]:
     """Build the upsert tool args schema, adding one optional str field per metadata parameter."""
+    parameters = params.metadata_parameters or []
     metadata_fields: dict[str, Any] = {
         f"{METADATA_PARAMETER_NAME_PREFIX}{p.name}": (str | None, Field(default=None, description=p.description))
         for p in parameters
     }
+    document_id_field: Any = (
+        (str, Field(description=params.document_id_description))
+        if params.is_document_id_required
+        else (str | None, Field(default=None, description=params.document_id_description))
+    )
     return create_model(
         "IndexUpsertArgs",
-        document=(str, Field(description="The document text to index")),
-        document_id=(
-            str | None,
-            Field(default=None, description="Optional explicit record ID; a UUID is generated when omitted"),
-        ),
+        document=(str, Field(description=params.document_description)),
+        document_id=document_id_field,
         **metadata_fields,
     )
 
@@ -91,8 +97,8 @@ async def build_index_tools(
             params.collection_description,
             "",
             "Args:",
-            "    document: The document text to index",
-            "    document_id: Optional explicit record ID; a UUID is generated when omitted",
+            f"    document: {params.document_description}",
+            f"    document_id: {params.document_id_description}",
             *_metadata_arg_lines(parameters),
             "",
             "Returns:",
@@ -144,7 +150,7 @@ async def build_index_tools(
         coroutine=upsert_index,
         name=f"{tool_name_prefix}{INDEXING_TOOL_NAME_UPSERT_SUFFIX}",
         description=upsert_docstring,
-        args_schema=_build_upsert_args_model(parameters),
+        args_schema=_build_upsert_args_model(params),
     )
     query_tool = StructuredTool.from_function(
         coroutine=query_index,
