@@ -4,6 +4,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from deepagents import create_deep_agent
+from deepagents.backends import FilesystemBackend
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -14,6 +15,7 @@ from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.checkpointing import get_checkpointer
 from tech_market_researcher.core.common import AgentRuntimeContext, AsyncReleasableResource
 from tech_market_researcher.core.configuration import ApplicationConfig, load_config
+from tech_market_researcher.core.constants import AGENT_BACKEND_MAX_FILE_SIZE_MB, AGENT_BACKEND_ROOT_DIR
 from tech_market_researcher.core.observability import agent_trace_context, setup_observability
 
 
@@ -106,6 +108,11 @@ async def create_agent(
         middleware=build_middleware_list(capabilities),
         context_schema=AgentRuntimeContext,
         checkpointer=checkpointer,
+        backend=FilesystemBackend(
+            root_dir=AGENT_BACKEND_ROOT_DIR,
+            virtual_mode=True,
+            max_file_size_mb=AGENT_BACKEND_MAX_FILE_SIZE_MB,
+        ),
     )
     return TechMarketResearcherAgent(
         agent,

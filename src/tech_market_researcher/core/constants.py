@@ -9,6 +9,11 @@ PROJECT_NAME = "tech-market-researcher"
 
 BASE_DEBUG_DIR_PATH = Path(".debug")
 
+# On-disk directory the agent's filesystem tools are rooted at (virtual mode).
+AGENT_BACKEND_ROOT_DIR = Path(".storage/agent/backend")
+# Maximum size of a single file the agent can read, in megabytes.
+AGENT_BACKEND_MAX_FILE_SIZE_MB = 10
+
 # Env var enabling the dump of rendered configs under BASE_DEBUG_DIR_PATH (True/true/1).
 DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR = "DEBUG_DUMP_RENDERED_CONFIGS"
 
