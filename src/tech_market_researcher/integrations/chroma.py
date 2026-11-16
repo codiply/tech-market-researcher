@@ -74,10 +74,29 @@ async def get_client() -> AsyncClientAPI:
     return await chromadb.AsyncHttpClient(host=host, port=port)
 
 
-async def _get_collection(client: AsyncClientAPI, name: str) -> AsyncCollection | None:
+def _build_embedding_function(
+    embeddings_model_name: str,
+) -> EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]]:
+    """Build the OMLX-backed OpenAIEmbeddingFunction used to embed documents."""
+    # Chroma expects an embedding function over the wider CollectionInput type; we only ever pass documents.
+    return cast(
+        EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]],
+        OpenAIEmbeddingFunction(
+            api_key=os.environ[_OMLX_API_KEY_ENV],
+            api_base=os.environ[_OMLX_BASE_URL_ENV].rstrip("/"),
+            model_name=embeddings_model_name,
+        ),
+    )
+
+
+async def _get_collection(
+    client: AsyncClientAPI,
+    name: str,
+    embedding_function: EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]],
+) -> AsyncCollection | None:
     """Return the collection with the given name, or None if it does not exist."""
     try:
-        return await client.get_collection(name=name)
+        return await client.get_collection(name=name, embedding_function=embedding_function)
     except NotFoundError:
         return None
 
@@ -91,7 +110,8 @@ async def get_or_create_collection(
     the OMLX server using the given embedding model, so documents get embedded
     on add. The model name is recorded in the collection metadata.
     """
-    collection = await _get_collection(client, name)
+    embedding_function = _build_embedding_function(embeddings_model_name)
+    collection = await _get_collection(client, name, embedding_function)
     if collection is not None:
         existing_model = collection.metadata.get(EMBEDDINGS_MODEL_NAME_METADATA_KEY)
         if existing_model != embeddings_model_name:
@@ -107,14 +127,7 @@ async def get_or_create_collection(
     # Chroma expects an embedding function over the wider CollectionInput type; we only ever pass documents.
     return await client.create_collection(
         name=name,
-        embedding_function=cast(
-            EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]],
-            OpenAIEmbeddingFunction(
-                api_key=os.environ[_OMLX_API_KEY_ENV],
-                api_base=os.environ[_OMLX_BASE_URL_ENV].rstrip("/"),
-                model_name=embeddings_model_name,
-            ),
-        ),
+        embedding_function=embedding_function,
         metadata={EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model_name},
     )
 
