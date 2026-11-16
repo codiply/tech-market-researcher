@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import mlflow
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field, create_model, model_validator
 
@@ -113,6 +114,56 @@ def _metadata_from_args(
     return metadata
 
 
+def _build_upsert_docstring(params: IndexToolsParams, parameters: list[MetadataParameter]) -> str:
+    """Build the upsert tool docstring, including the collection description and argument docs."""
+    if params.document_fetcher is not None:
+        document_section_lines = [
+            "The document content is fetched server-side from the given document ID and stored "
+            "directly; you only provide the ID and metadata, never the content.",
+            "",
+        ]
+        document_args_lines: list[str] = []
+    else:
+        document_section_lines = []
+        document_args_lines = [f"    document: {params.document_description}"]
+    return "\n".join(
+        [
+            f"Add a document to the {params.collection_name} collection, "
+            "replacing any existing records of the same ID.",
+            "",
+            "About this collection:",
+            params.collection_description,
+            *document_section_lines,
+            "Args:",
+            *document_args_lines,
+            f"    document_id: {params.document_id_description}",
+            *_metadata_arg_lines(parameters),
+            "",
+            "Returns:",
+            "    The ID of the stored record",
+        ]
+    )
+
+
+def _build_query_docstring(params: IndexToolsParams) -> str:
+    """Build the query tool docstring, including the collection description."""
+    return "\n".join(
+        [
+            f"Retrieve the documents most relevant to a query from the {params.collection_name} collection.",
+            "",
+            "About this collection:",
+            params.collection_description,
+            "",
+            "Args:",
+            "    query: Search query to execute",
+            "    max_results: Maximum number of results to return (max 25, default: 5)",
+            "",
+            "Returns:",
+            "    Numbered documents with ID and distance",
+        ]
+    )
+
+
 async def build_index_tools(
     chroma_client,
     params: IndexToolsParams,
@@ -136,50 +187,7 @@ async def build_index_tools(
         EmbeddingModelMismatchBehavior.RAISE,
     )
     token_encoder = get_token_encoder() if params.chunk_size_tokens is not None else None
-
-    if params.document_fetcher is not None:
-        document_section_lines = [
-            "The document content is fetched server-side from the given document ID and stored "
-            "directly; you only provide the ID and metadata, never the content.",
-            "",
-        ]
-        document_args_lines: list[str] = []
-    else:
-        document_section_lines = []
-        document_args_lines = [f"    document: {params.document_description}"]
-    upsert_docstring = "\n".join(
-        [
-            f"Add a document to the {params.collection_name} collection, "
-            "replacing any existing records of the same ID.",
-            "",
-            "About this collection:",
-            params.collection_description,
-            *document_section_lines,
-            "Args:",
-            *document_args_lines,
-            f"    document_id: {params.document_id_description}",
-            *_metadata_arg_lines(parameters),
-            "",
-            "Returns:",
-            "    The ID of the stored record",
-        ]
-    )
-
-    query_docstring = "\n".join(
-        [
-            f"Retrieve the documents most relevant to a query from the {params.collection_name} collection.",
-            "",
-            "About this collection:",
-            params.collection_description,
-            "",
-            "Args:",
-            "    query: Search query to execute",
-            "    max_results: Maximum number of results to return (max 25, default: 5)",
-            "",
-            "Returns:",
-            "    Numbered documents with ID and distance",
-        ]
-    )
+    query_span_name = f"{tool_name_prefix}{INDEXING_TOOL_NAME_QUERY_SUFFIX}"
 
     async def upsert_index(document: str, document_id: str | None = None, **metadata_fields: str) -> str:
         metadata = _metadata_from_args(metadata_fields, parameters)
@@ -225,24 +233,34 @@ async def build_index_tools(
         max_results: int = QUERY_INDEX_MAX_RESULTS_DEFAULT,
     ) -> str:
         effective_max_results = min(max_results, QUERY_INDEX_MAX_RESULTS_MAX)
-        result = await chroma_query(collection, query, n_results=effective_max_results)
-        items = result.items[0]
+        with mlflow.start_span(name=query_span_name, span_type="RETRIEVER") as span:
+            span.set_inputs({"query": query, "max_results": effective_max_results})
+            result = await chroma_query(collection, query, n_results=effective_max_results)
+            items = [item for item in result.items[0] if item.document is not None]
+            span.set_outputs(
+                [
+                    {
+                        "content": item.document,
+                        "metadata": {**(item.metadata or {}), "distance": item.distance},
+                    }
+                    for item in items
+                ]
+            )
         result_texts = [
             f"{index}. **{item.id}** (distance: {item.distance:.4f})\n   {item.document}".rstrip()
             for index, item in enumerate(items, start=1)
-            if item.document is not None
         ]
         return f"Found {len(items)} result(s) for '{query}':\n\n" + "\n\n".join(result_texts)
 
     upsert_tool = StructuredTool.from_function(
         coroutine=upsert_index_fetched if params.document_fetcher is not None else upsert_index,
         name=f"{tool_name_prefix}{INDEXING_TOOL_NAME_UPSERT_SUFFIX}",
-        description=upsert_docstring,
+        description=_build_upsert_docstring(params, parameters),
         args_schema=_build_upsert_args_model(params),
     )
     query_tool = StructuredTool.from_function(
         coroutine=query_index,
         name=f"{tool_name_prefix}{INDEXING_TOOL_NAME_QUERY_SUFFIX}",
-        description=query_docstring,
+        description=_build_query_docstring(params),
     )
     return [upsert_tool, query_tool]
