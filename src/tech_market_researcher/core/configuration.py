@@ -81,16 +81,25 @@ class CurrentDateTimeConfig(BasePydanticModel):
 
 
 class WebPageIndexerConfig(BasePydanticModel):
-    """Web-page indexer tool settings. Omit the section (or set enabled: false) to disable."""
+    """Web-page indexer tool settings. Omit the section (or set enabled: false) to disable.
+
+    Fetched pages are chunked into token-bounded chunks before being embedded, so each chunk stays
+    within the embeddings model's input limit and remains individually retrievable.
+    """
 
     enabled: bool = False
     collection_name: str | None = None
     embeddings_model_name: str | None = None
+    chunk_size_tokens: int = 500
+    chunk_overlap_tokens: int = 50
 
     @model_validator(mode="after")
     def _validate_enabled_fields(self) -> "WebPageIndexerConfig":
         if self.enabled and (self.collection_name is None or self.embeddings_model_name is None):
             msg = "web_page_indexer requires collection_name and embeddings_model_name when enabled"
+            raise ValueError(msg)
+        if not 0 <= self.chunk_overlap_tokens < self.chunk_size_tokens:
+            msg = "web_page_indexer chunk_overlap_tokens must be less than chunk_size_tokens"
             raise ValueError(msg)
         return self
 

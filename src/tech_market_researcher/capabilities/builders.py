@@ -12,6 +12,7 @@ from tech_market_researcher.capabilities.runtime_context import runtime_context_
 from tech_market_researcher.capabilities.search import get_search_tool
 from tech_market_researcher.capabilities.webpage import fetch_page
 from tech_market_researcher.core.configuration import CapabilitiesConfig
+from tech_market_researcher.core.webpage import fetch_as_markdown
 from tech_market_researcher.integrations.chroma import get_client
 
 
@@ -75,6 +76,9 @@ async def build_tool_list(config: CapabilitiesConfig) -> list[BaseTool]:
                     document_id_description=WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION,
                     metadata_parameters=WEB_PAGE_INDEX_METADATA_PARAMETERS,
                     embedding_model_name=indexer.embeddings_model_name,
+                    document_fetcher=fetch_as_markdown,
+                    chunk_size_tokens=indexer.chunk_size_tokens,
+                    chunk_overlap_tokens=indexer.chunk_overlap_tokens,
                 ),
             )
         )

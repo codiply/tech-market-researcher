@@ -132,6 +132,11 @@ async def get_or_create_collection(
     )
 
 
+async def delete_where(collection: AsyncCollection, where: Where) -> None:
+    """Delete all records matching the given where clause."""
+    await collection.delete(where=where)
+
+
 async def upsert_documents(collection: AsyncCollection, documents: Sequence[ChromaDocument]) -> None:
     """Insert records into a collection, embedding them with the collection's embedding function.
 
