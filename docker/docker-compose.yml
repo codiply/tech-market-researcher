@@ -72,7 +72,7 @@ services:
     ports:
       # Chroma's default host port 8000 is a very common port, so use an
       # unusual host port (like SearXNG); the container listens on 8000.
-      - "8385:8000"
+      - "8386:8000"
     volumes:
       # Host folder, ignored by git via .storage/.gitignore
       - ../.storage/chroma:/data
@@ -80,6 +80,30 @@ services:
       # The image ships no curl/wget and no Python interpreter (chroma is a
       # compiled binary), so probe the v2 heartbeat endpoint over bash's
       # /dev/tcp.
+      test:
+        - CMD-SHELL
+        - |
+          bash -c 'exec 3<>/dev/tcp/localhost/8000 &&
+          printf "GET /api/v2/heartbeat HTTP/1.0\r\n\r\n" >&3 &&
+          timeout 3 cat <&3 | grep -qi heartbeat'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Second vector store, used by the evals. Same image and configuration as
+  # the main `chroma` service, just a separate instance and data folder.
+  chroma_evals:
+    image: chromadb/chroma:1.0.21
+    container_name: chroma_evals
+    ports:
+      # Unusual host port (like SearXNG); the container listens on 8000.
+      - "8387:8000"
+    volumes:
+      # Host folder, ignored by git via .storage/.gitignore
+      - ../.storage/chroma_evals:/data
+    healthcheck:
+      # Same as the main chroma service: probe the v2 heartbeat endpoint over
+      # bash's /dev/tcp.
       test:
         - CMD-SHELL
         - |
@@ -105,7 +129,7 @@ services:
         condition: service_healthy
     ports:
       # Unusual host port to avoid conflicts with common services.
-      - "8386:3001"
+      - "8385:3001"
     healthcheck:
       # The image ships no curl/wget, so probe the UI with Node's fetch.
       test:
@@ -178,7 +202,7 @@ services:
     image: tech-market-researcher/permissions-fixer:local
     container_name: permissions_fixer
     environment:
-      TARGET_DIRS: "/phoenix_db /mlflow_db /agent_db /chroma /minio /pgadmin /searxng_config /searxng_cache /searxng_valkey"
+      TARGET_DIRS: "/phoenix_db /mlflow_db /agent_db /chroma /chroma_evals /minio /pgadmin /searxng_config /searxng_cache /searxng_valkey"
       CRON_SCHEDULE: "*/1 * * * *"
     depends_on:
       mlflow_db:
@@ -189,6 +213,8 @@ services:
         condition: service_healthy
       chroma:
         condition: service_healthy
+      chroma_evals:
+        condition: service_healthy
       minio:
         condition: service_healthy
     volumes:
@@ -196,6 +222,7 @@ services:
       - ../.storage/mlflow_db:/mlflow_db
       - ../.storage/agent_db:/agent_db
       - ../.storage/chroma:/chroma
+      - ../.storage/chroma_evals:/chroma_evals
       - ../.storage/minio:/minio
       - ../.storage/pgadmin:/pgadmin
       - ../.storage/searxng_config:/searxng_config

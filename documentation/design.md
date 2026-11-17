@@ -32,6 +32,7 @@ flowchart LR
         phoenix_db["phoenix_db<br/>Postgres 17"]
         agent_db["agent_db<br/>Postgres 17"]
         chroma["chroma<br/>Chroma (vector store)"]
+        chroma_evals["chroma_evals<br/>Chroma (evals vector store)"]
         chroma_admin["chroma_admin<br/>Chroma Admin UI"]
     end
 
@@ -50,6 +51,7 @@ flowchart LR
     main -->|search tool - alternative| tavily
     main -->|fetch_page tool| web
     main -->|web page index tools| chroma
+    main -->|web page index tools, when run from the evals| chroma_evals
     main -->|filesystem tools in virtual mode| agent_fs
     main -->|embeddings, not via gateway| macbook
     main -->|conversation checkpoints| agent_db
@@ -74,14 +76,15 @@ flowchart LR
     pgadmin -->|manages| phoenix_db
     pgadmin -->|manages| agent_db
     chroma_admin -->|manages| chroma
+    chroma_admin -->|manages| chroma_evals
 ```
 
 - **Agent** — an agent built on [LangChain](https://www.langchain.com) [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent), run interactively from the CLI or from a web UI (a [Gradio](https://gradio.app) app or a [Textual](https://github.com/Textualize/textual) app; see Developer Setup). LLM requests go through the [MLflow](https://mlflow.org) AI Gateway; every run is traced back to MLflow and Phoenix. The conversation state is checkpointed by the LangGraph checkpointer, selected in the agent config: in-memory (per process) or Postgres, stored in a dedicated schema of the agent database so the conversation persists across UI restarts. Filesystem tools are backed by a dedicated on-disk directory in virtual mode, so the agent's file operations are confined to its own storage area (with a cap on the size of individual files it can read).
-- **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Phoenix** (datasets and results are stored as a Phoenix experiment in Phoenix).
+- **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Phoenix** (datasets and results are stored as a Phoenix experiment in Phoenix). When the agent is run from the evaluations, its web page index points at the dedicated `chroma_evals` Chroma instance instead of the main one, so evaluation runs do not pollute the agent's own index.
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces. It also monitors token usage and cost in real time, and supports budgets that cap spending, so a runaway agent run can't keep consuming tokens and money indefinitely.
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
 - **Web page index** — the agent indexes web pages in the Chroma vector store and queries them with similarity search; documents are embedded by the OMLX embeddings endpoint, called directly by the agent (the AI Gateway does not proxy embeddings).
-- **Supporting containers** — three separate [Postgres](https://www.postgresql.org) instances (MLflow's backend store, Phoenix's backend store, and the agent's database), [Chroma](https://www.trychroma.com/) (vector store), [Chroma Admin](https://github.com/flanker/chromadb-admin) (its web UI), [Arize Phoenix](https://arize.com) (LLM/agent observability), [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI for all three Postgres instances).
+- **Supporting containers** — three separate [Postgres](https://www.postgresql.org) instances (MLflow's backend store, Phoenix's backend store, and the agent's database), two [Chroma](https://www.trychroma.com/) instances (the agent's vector store and a second one for the evals), [Chroma Admin](https://github.com/flanker/chromadb-admin) (their web UI), [Arize Phoenix](https://arize.com) (LLM/agent observability), [MinIO](https://min.io) (artifact storage), and [pgAdmin](https://www.pgadmin.org) (database UI for all three Postgres instances).
 
 ## Bootstrapping
 

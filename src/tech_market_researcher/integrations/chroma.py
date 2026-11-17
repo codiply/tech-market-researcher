@@ -59,9 +59,9 @@ class ChromaQueryResult(BaseModel):
 
 
 def _split_chroma_url() -> tuple[str, int]:
-    """Split the CHROMA_URL env var into (host, port), defaulting to localhost:8385."""
-    url = os.environ.get("CHROMA_URL", "http://localhost:8385")
-    return urlsplit(url).hostname or "localhost", int(urlsplit(url).port or 8385)
+    """Split the CHROMA_URL env var into (host, port), defaulting to localhost:8386."""
+    url = os.environ.get("CHROMA_URL", "http://localhost:8386")
+    return urlsplit(url).hostname or "localhost", int(urlsplit(url).port or 8386)
 
 
 async def get_client() -> AsyncClientAPI:
