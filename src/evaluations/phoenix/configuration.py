@@ -1,15 +1,25 @@
 """Config models. All classes here are named XxxConfig."""
 
-import os
 from pathlib import Path
 
 from pydantic import Field
 
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
-from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH, DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR
+from tech_market_researcher.core.constants import (
+    ARCHIVE_RENDERED_CONFIGS_ENV_VAR,
+    BASE_DEBUG_DIR_PATH,
+    DEBUG_CONFIG_ARCHIVE_FOLDER,
+    DEBUG_CONFIG_ARCHIVE_MAX_COUNT,
+    DEBUG_CONFIG_FOLDER,
+    DEBUG_CONFIG_LATEST_FOLDER,
+    DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR,
+)
+from tech_market_researcher.core.environment import env_flag_is_true
 
 CONFIG_DIR = Path("config") / "evaluations" / "phoenix"
+# Loader-specific path under the debug config folder.
+DEBUG_CONFIG_LOADER_PATH = Path("evaluations") / "phoenix"
 
 
 class BaseEvaluatorConfig(BasePydanticModel):
@@ -73,13 +83,21 @@ def get_config_loader() -> ConfigLoader:
     """Lazily construct the config loader on first use."""
     global _CONFIG_LOADER  # pylint: disable=global-statement
     if _CONFIG_LOADER is None:
+        base_dir = BASE_DEBUG_DIR_PATH / DEBUG_CONFIG_FOLDER / DEBUG_CONFIG_LOADER_PATH
         debug_dir_path: Path | None = None
-        if os.environ.get(DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR, "").lower() in {"true", "1"}:
-            debug_dir_path = BASE_DEBUG_DIR_PATH / "config" / "evaluations" / "phoenix"
+        archive_dir_path: Path | None = None
+        if env_flag_is_true(DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR):
+            debug_dir_path = base_dir / DEBUG_CONFIG_LATEST_FOLDER
+        if env_flag_is_true(ARCHIVE_RENDERED_CONFIGS_ENV_VAR):
+            archive_dir_path = base_dir / DEBUG_CONFIG_ARCHIVE_FOLDER
         _CONFIG_LOADER = ConfigLoader(
             PhoenixEvaluationConfig,
             CONFIG_DIR,
-            ConfigLoaderParams(debug_dir_path=debug_dir_path),
+            ConfigLoaderParams(
+                debug_dir_path=debug_dir_path,
+                archive_dir_path=archive_dir_path,
+                archive_max_count=DEBUG_CONFIG_ARCHIVE_MAX_COUNT,
+            ),
         )
     return _CONFIG_LOADER
 

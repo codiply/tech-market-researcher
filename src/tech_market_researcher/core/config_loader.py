@@ -2,11 +2,15 @@
 
 import logging
 import shutil
+import tempfile
+import threading
+import zipfile
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Self, TypeVar
 
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from tech_market_researcher.core.collection_utils import find_duplicates
 
@@ -34,6 +38,10 @@ class ConfigLoaderParams(BaseModel):
     config_file_extension: str = "yaml"
     # When set, rendered configs are dumped under this path; None disables the dump.
     debug_dir_path: Path | None = None
+    # When set, the rendered debug dump is zipped into a timestamped archive in this folder after each load.
+    archive_dir_path: Path | None = None
+    # When set, at most this many archives are kept in the archive dir; older ones are pruned after each archive.
+    archive_max_count: int | None = None
 
     @field_validator("config_file_extension")
     @classmethod
@@ -41,6 +49,21 @@ class ConfigLoaderParams(BaseModel):
         if value not in ("yaml", "yml"):
             raise ValueError("config_file_extension must be 'yaml' or 'yml'.")
         return value
+
+    @model_validator(mode="after")
+    def _check_debug_and_archive_dirs_disjoint(self) -> Self:
+        if (
+            self.debug_dir_path is not None
+            and self.archive_dir_path is not None
+            and (
+                self.debug_dir_path.is_relative_to(self.archive_dir_path)
+                or self.archive_dir_path.is_relative_to(self.debug_dir_path)
+            )
+        ):
+            raise ValueError("debug_dir_path and archive_dir_path must not be the same or nested within each other.")
+        if self.archive_max_count is not None and self.archive_max_count < 1:
+            raise ValueError("archive_max_count must be a positive integer.")
+        return self
 
 
 def deep_merge(configs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -67,6 +90,8 @@ class ConfigLoader(Generic[ConfigT]):
         self._model_class = model_class
         self._base_path = base_path
         self._params = params
+        # Serializes the rmtree + replace of the shared debug dir; the dumps themselves happen in private staging dirs.
+        self._swap_lock = threading.Lock()
 
     def _read_yaml(self, path: Path) -> dict[str, Any]:
         """Read a YAML config file. An empty file (e.g. fully commented out) is treated as an empty config."""
@@ -108,19 +133,6 @@ class ConfigLoader(Generic[ConfigT]):
             logger.info("Applying %d extra mixin(s): %s", len(mixins), ", ".join(mixin_names))
         return mixins
 
-    def _prepare_debug_directory_if_needed(self) -> Path | None:
-        """Return the effective debug dir, deleting any existing files there so it reflects only the latest run.
-
-        Returns None when no debug dir was configured.
-        """
-        debug_dir = self._params.debug_dir_path
-        if debug_dir is None:
-            return None
-        if debug_dir.exists():
-            shutil.rmtree(debug_dir)
-        logger.info("Dumping config debug files to %s", debug_dir)
-        return debug_dir
-
     def _debug_copy_file_if_needed(self, debug_dir: Path | None, relative_path: str, source_path: Path) -> None:
         """Copy a file verbatim under the debug dir, creating folders as needed, when set."""
         if debug_dir is None:
@@ -147,6 +159,50 @@ class ConfigLoader(Generic[ConfigT]):
             debug_dir, f"{folder}/{config_name}.{self._params.config_file_extension}", merged
         )
 
+    def _archive_debug_dir_if_needed(self, debug_dir: Path | None, config_name: str) -> None:
+        """Zip the debug dir contents into a timestamped archive in the archive dir, when set.
+
+        Prunes the oldest archives first when archive_max_count is set.
+        """
+        if debug_dir is None or self._params.archive_dir_path is None:
+            return
+        archive_dir = self._params.archive_dir_path
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        archive_path = archive_dir / f"config_{config_name}_{timestamp}.zip"
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(debug_dir.rglob("*")):
+                if path.is_file():
+                    archive.write(path, path.relative_to(debug_dir))
+        logger.info("Archived config debug files to %s", archive_path)
+        self._prune_archives_if_needed(archive_dir)
+
+    def _prune_archives_if_needed(self, archive_dir: Path) -> None:
+        """Keep only the newest archive_max_count archives (by modification time), when the cap is set."""
+        max_count = self._params.archive_max_count
+        if max_count is None:
+            return
+        archives = sorted(archive_dir.glob("*.zip"), key=lambda path: path.stat().st_mtime, reverse=True)
+        for stale in archives[max_count:]:
+            stale.unlink(missing_ok=True)
+            logger.info("Pruned stale config archive: %s", stale)
+
+    def _swap_debug_dir_if_needed(self, staging_dir: Path) -> None:
+        """Replace the contents of the configured debug dir with the staged one, when set.
+
+        The target is emptied and the staged contents are copied in. The copy is not atomic, so a
+        reader may briefly see an empty or partially populated debug dir; the swap is serialized per
+        instance, so concurrent loads on the same loader cannot interleave.
+        """
+        debug_dir = self._params.debug_dir_path
+        if debug_dir is None:
+            return
+        with self._swap_lock:
+            if debug_dir.exists():
+                shutil.rmtree(debug_dir)
+            shutil.copytree(staging_dir, debug_dir)
+        logger.info("Replaced the debug dir with the latest dump: %s", debug_dir)
+
     def validate_all_configs(self) -> None:
         """Load every config in the base path, skipping the common config and local overrides."""
         for path in sorted(self._base_path.glob(f"*.{self._params.config_file_extension}")):
@@ -162,6 +218,10 @@ class ConfigLoader(Generic[ConfigT]):
     ) -> ConfigT:
         """Load and validate the config.
 
+        When a debug dir and/or archive dir is configured, the rendered layers are dumped into a private
+        staging dir, archived, and the staged dir then replaces the latest debug dir (swaps are serialized
+        per instance). On failure the staging dir is discarded and no archive is written.
+
         Args:
             config_name: Name of the config to load.
             extra_mixins: Names of mixins in the mixins folder, applied on top of all other layers, in order.
@@ -171,9 +231,26 @@ class ConfigLoader(Generic[ConfigT]):
             raise ValueError(
                 f"Cannot load '{config_name}': the common config is not a standalone config that can be loaded."
             )
-        ext = self._params.config_file_extension
+        if self._params.debug_dir_path is None and self._params.archive_dir_path is None:
+            return self._load_config(config_name, extra_mixins, include_local_overrides, debug_dir=None)
+        with tempfile.TemporaryDirectory(prefix="config_debug_") as staging_name:
+            staging_dir = Path(staging_name)
+            where = self._params.debug_dir_path if self._params.debug_dir_path is not None else "the archive dir"
+            logger.info("Preparing config debug dump for %s in staging dir: %s", where, staging_dir)
+            result = self._load_config(config_name, extra_mixins, include_local_overrides, debug_dir=staging_dir)
+            self._archive_debug_dir_if_needed(staging_dir, config_name)
+            self._swap_debug_dir_if_needed(staging_dir)
+            return result
 
-        debug_dir = self._prepare_debug_directory_if_needed()
+    def _load_config(
+        self,
+        config_name: str,
+        extra_mixins: list[str] | None,
+        include_local_overrides: bool,
+        debug_dir: Path | None,
+    ) -> ConfigT:
+        """Merge all config layers, dump them under the debug dir when set, and validate into the model."""
+        ext = self._params.config_file_extension
 
         configs: list[dict[str, Any]] = []
 
