@@ -1,5 +1,6 @@
 """Config models. All classes here are named XxxConfig."""
 
+import logging
 import os
 from enum import Enum
 from pathlib import Path
@@ -8,7 +9,12 @@ from pydantic import Field, SecretStr, model_validator
 
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
-from tech_market_researcher.core.constants import BASE_DEBUG_DIR_PATH, DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR
+from tech_market_researcher.core.constants import (
+    AGENT_DEFAULT_LOG_LEVEL,
+    AGENT_DEFAULT_LOGS_DIR,
+    BASE_DEBUG_DIR_PATH,
+    DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR,
+)
 
 CONFIG_DIR = Path("config") / "agent"
 
@@ -209,6 +215,20 @@ class ObservabilityConfig(BasePydanticModel):
     phoenix: PhoenixObservabilityConfig = Field(default_factory=PhoenixObservabilityConfig)
 
 
+class LoggingConfig(BasePydanticModel):
+    """Agent file logging settings."""
+
+    directory: Path = AGENT_DEFAULT_LOGS_DIR
+    level: str = AGENT_DEFAULT_LOG_LEVEL
+
+    @model_validator(mode="after")
+    def _check_level(self) -> "LoggingConfig":
+        valid = sorted(logging.getLevelNamesMapping())
+        if self.level.upper() not in logging.getLevelNamesMapping():
+            raise ValueError(f"level must be one of {valid}, got '{self.level}'.")
+        return self
+
+
 def resolve_model_connection_details(
     model_providers: dict[str, ModelProviderConfig], model: ModelConfig
 ) -> ModelConnectionDetails:
@@ -231,6 +251,7 @@ class ApplicationConfig(BasePydanticModel):
     model_providers: dict[str, ModelProviderConfig]
     supervisor: SupervisorConfig
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     def get_model_connection_details(self, model: ModelConfig) -> ModelConnectionDetails:
         """Resolve a model's provider into its full connection details."""

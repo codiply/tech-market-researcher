@@ -1,5 +1,6 @@
 """Supervisor agent backed by the MLflow AI Gateway."""
 
+import logging
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -16,7 +17,10 @@ from tech_market_researcher.core.checkpointing import get_checkpointer
 from tech_market_researcher.core.common import AgentRuntimeContext, AsyncReleasableResource
 from tech_market_researcher.core.configuration import ApplicationConfig, load_config
 from tech_market_researcher.core.constants import AGENT_BACKEND_MAX_FILE_SIZE_MB, AGENT_BACKEND_ROOT_DIR
+from tech_market_researcher.core.logging_setup import setup_agent_logging
 from tech_market_researcher.core.observability import agent_trace_context, setup_observability
+
+logger = logging.getLogger(__name__)
 
 
 class TechMarketResearcherAgent:
@@ -46,7 +50,9 @@ class TechMarketResearcherAgent:
         # The AgentRuntimeContext constructor always generates a session id, so it is never None here.
         assert context.session_id is not None
         with agent_trace_context(context.session_id, self._environment):
-            return await self._agent.ainvoke({"messages": messages}, config=config, context=context, version="v1")
+            result = await self._agent.ainvoke({"messages": messages}, config=config, context=context, version="v1")
+        logger.debug("Agent turn completed: session=%s, thread=%s", context.session_id, context.thread_id)
+        return result
 
     async def __aenter__(self) -> "TechMarketResearcherAgent":
         """Enter the agent as an async context manager."""
@@ -65,7 +71,9 @@ class TechMarketResearcherAgent:
         """Return the stored messages for the conversation under the context's thread id, if any."""
         config: RunnableConfig = {"configurable": {"thread_id": context.thread_id}}
         state = await self._agent.aget_state(config)
-        return state.values.get("messages", [])
+        messages = state.values.get("messages", [])
+        logger.debug("Replaying %d stored message(s) for thread=%s", len(messages), context.thread_id)
+        return messages
 
 
 def _apply_config_mutations(
@@ -91,8 +99,15 @@ async def create_agent(
     """
     config = load_config(args.config_name)
     config = _apply_config_mutations(config, config_mutations_hooks)
+    setup_agent_logging(config.logging)
     setup_observability(config.observability, config.environment)
     model_connection = config.get_model_connection_details(config.supervisor.model)
+    logger.info(
+        "Creating agent: config=%s, environment=%s, model=%s",
+        args.config_name,
+        config.environment,
+        model_connection.model_name,
+    )
     model = ChatOpenAI(
         model=model_connection.model_name,
         base_url=model_connection.base_url,

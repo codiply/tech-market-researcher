@@ -11,6 +11,10 @@ BASE_DEBUG_DIR_PATH = Path(".debug")
 
 # On-disk directory the agent's filesystem tools are rooted at (virtual mode).
 AGENT_BACKEND_ROOT_DIR = Path(".storage/agent/backend")
+# Defaults for the agent's file logging (see LoggingConfig).
+AGENT_DEFAULT_LOGS_DIR = Path(".storage/agent/logs")
+AGENT_DEFAULT_LOG_LEVEL = "INFO"
+AGENT_LOG_FILE_NAME = "agent.log"
 # Maximum size of a single file the agent can read, in megabytes.
 AGENT_BACKEND_MAX_FILE_SIZE_MB = 10
 

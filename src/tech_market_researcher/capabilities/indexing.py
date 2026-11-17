@@ -1,6 +1,7 @@
 """Agent tools for a document index: upserting documents and querying them."""
 
 import inspect
+import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -30,6 +31,8 @@ METADATA_PARAMETER_NAME_PREFIX = "metadata_"
 SOURCE_ID_METADATA_KEY = "_source_id"
 CHUNK_INDEX_METADATA_KEY = "_chunk_index"
 CHUNK_COUNT_METADATA_KEY = "_chunk_count"
+
+logger = logging.getLogger(__name__)
 
 
 class MetadataParameter(BaseModel):
@@ -193,11 +196,13 @@ async def build_index_tools(
     async def upsert_index(document: str, document_id: str | None = None, **metadata_fields: str) -> str:
         metadata = _metadata_from_args(metadata_fields, parameters)
         record_id = document_id or str(uuid.uuid4())
+        logger.info("Upserting 1 document into collection '%s' (id=%s)", params.collection_name, record_id)
         await upsert_documents(collection, [ChromaDocument(id=record_id, document=document, metadata=metadata)])
         return f"Stored document with id {record_id}"
 
     async def upsert_index_fetched(document_id: str, **metadata_fields: str) -> str:
         assert params.document_fetcher is not None
+        logger.info("Fetching and indexing document %s into collection '%s'", document_id, params.collection_name)
         content = params.document_fetcher(document_id)
         if inspect.isawaitable(content):
             content = await content
@@ -226,6 +231,12 @@ async def build_index_tools(
         else:
             documents = [ChromaDocument(id=document_id, document=content, metadata=metadata)]
             chunk_suffix = ""
+        logger.debug(
+            "Upserting %d document(s) into collection '%s' (document_id=%s)",
+            len(documents),
+            params.collection_name,
+            document_id,
+        )
         await upsert_documents(collection, documents)
         return f"Stored document with id {document_id}{chunk_suffix}"
 
@@ -234,6 +245,7 @@ async def build_index_tools(
         max_results: int = QUERY_INDEX_MAX_RESULTS_DEFAULT,
     ) -> str:
         effective_max_results = min(max_results, QUERY_INDEX_MAX_RESULTS_MAX)
+        logger.info("Querying collection '%s' (max_results=%d)", params.collection_name, effective_max_results)
         with mlflow.start_span(name=query_span_name, span_type="RETRIEVER") as span:
             span.set_inputs({"query": query, "max_results": effective_max_results})
             result = await chroma_query(collection, query, n_results=effective_max_results)

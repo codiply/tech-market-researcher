@@ -5,6 +5,7 @@ configured provider (recorded as a span attribute). These tools only return sear
 results (title, URL, snippet). Fetching full page content is a separate capability
 (see capabilities/webpage.py)."""
 
+import logging
 import os
 from collections.abc import Callable
 from typing import Annotated, Literal
@@ -21,6 +22,8 @@ from tech_market_researcher.core.environment import SEARXNG_URL
 SEARCH_TOOL_NAME = "web_search"
 SEARCH_MAX_RESULT_COUNT_DEFAULT = 5
 SEARCH_MAX_RESULT_COUNT_MAX = 25
+
+logger = logging.getLogger(__name__)
 
 
 def _get_tavily_client() -> TavilyClient:
@@ -98,6 +101,7 @@ def get_search_tool(search: SearchToolConfig) -> BaseTool:
             Numbered search results with title, URL and snippet
         """
         effective_max_results = min(max_results, SEARCH_MAX_RESULT_COUNT_MAX)
+        logger.info("Searching the web (provider=%s, max_results=%d)", search.provider.value, effective_max_results)
         with mlflow.start_span(name=SEARCH_TOOL_NAME, span_type="RETRIEVER") as span:
             span.set_inputs({"query": query, "max_results": effective_max_results, "topic": topic})
             span.set_attributes({"provider": search.provider.value})

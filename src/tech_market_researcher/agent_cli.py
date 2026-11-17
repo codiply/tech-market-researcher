@@ -1,6 +1,7 @@
 """Interactive chat agent talking to an MLflow AI Gateway endpoint."""
 
 import asyncio
+import logging
 
 from dotenv import load_dotenv
 
@@ -19,6 +20,7 @@ from tech_market_researcher.core.common import AgentRuntimeContext
 # pylint: enable=wrong-import-position
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -33,6 +35,12 @@ async def _chat(args: CliCommandLineArguments) -> None:
     """Run the interactive chat REPL on a single event loop."""
     agent = await create_agent(args)
     context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
+    logger.info(
+        "Starting chat REPL: user_id=%s, session_id=%s, time_zone=%s",
+        args.user_id,
+        args.session_id,
+        args.time_zone,
+    )
     console.print(f"[dim]Runtime context:\n{context.model_dump_json(indent=2)}[/]")
 
     console.print("Chat with the agent. Type 'exit' to quit.")
@@ -52,6 +60,7 @@ async def _chat(args: CliCommandLineArguments) -> None:
 
         # The checkpointer resumes the conversation, so only the new turn is passed.
         result = await agent.ainvoke([{"role": "user", "content": user_input}], context=context)
+        logger.info("Chat turn completed: session_id=%s", context.session_id)
         console.print("[bold cyan]agent>[/bold cyan]", result["messages"][-1].content)
 
 

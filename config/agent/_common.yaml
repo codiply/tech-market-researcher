@@ -40,6 +40,9 @@ supervisor:
         name: Qwen3-Embedding-0.6B-4bit-DWQ
       chunk_size_tokens: 500
       chunk_overlap_tokens: 50
+logging:
+  directory: .storage/agent/logs
+  level: DEBUG
 observability:
   mlflow:
     enabled: true
