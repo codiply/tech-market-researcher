@@ -65,7 +65,7 @@ async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
         indexer = capabilities.web_page_indexer
         assert indexer.collection_name is not None  # Validated by WebPageIndexerConfig
         assert indexer.embeddings_model is not None  # Validated by WebPageIndexerConfig
-        client = await get_client()
+        client = await get_client(config.indexing.chroma_url_env_var)
         tools.extend(
             await build_index_tools(
                 client,

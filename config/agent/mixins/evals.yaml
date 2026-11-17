@@ -1,2 +1,4 @@
+indexing:
+  chroma_url_env_var: CHROMA_EVALS_URL
 logging:
   directory: .storage/evals/agent/logs

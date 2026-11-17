@@ -1,5 +1,6 @@
 """Helpers for managing collections in our Chroma server."""
 
+import logging
 import os
 from collections.abc import Sequence
 from datetime import datetime, timezone
@@ -26,6 +27,8 @@ EMBEDDINGS_MODEL_NAME_METADATA_KEY = "_embeddings_model_name"
 EMBEDDINGS_COMPUTED_AT_METADATA_KEY = "_embeddings_computed_at"
 
 DEFAULT_QUERY_N_RESULTS = 10
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingModelMismatchBehavior(StrEnum):
@@ -58,15 +61,16 @@ class ChromaQueryResult(BaseModel):
     items: list[list[QueryResultItem]]
 
 
-def _split_chroma_url() -> tuple[str, int]:
-    """Split the CHROMA_URL env var into (host, port), defaulting to localhost:8386."""
-    url = os.environ.get("CHROMA_URL", "http://localhost:8386")
+def _split_chroma_url(chroma_url_env_var: str) -> tuple[str, int]:
+    """Split the Chroma URL env var into (host, port), defaulting to localhost:8386."""
+    url = os.environ.get(chroma_url_env_var, "http://localhost:8386")
     return urlsplit(url).hostname or "localhost", int(urlsplit(url).port or 8386)
 
 
-async def get_client() -> AsyncClientAPI:
-    """Create a client connected to the Chroma server configured in env."""
-    host, port = _split_chroma_url()
+async def get_client(chroma_url_env_var: str = "CHROMA_URL") -> AsyncClientAPI:
+    """Create a client connected to the Chroma server at the given env var's URL."""
+    host, port = _split_chroma_url(chroma_url_env_var)
+    logger.debug("Connecting to Chroma server at %s:%s", host, port)
     return await chromadb.AsyncHttpClient(host=host, port=port)
 
 

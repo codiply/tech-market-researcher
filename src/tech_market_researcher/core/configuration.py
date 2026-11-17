@@ -223,6 +223,12 @@ class ObservabilityConfig(BasePydanticModel):
     phoenix: PhoenixObservabilityConfig = Field(default_factory=PhoenixObservabilityConfig)
 
 
+class IndexingConfig(BasePydanticModel):
+    """Vector index (Chroma) connection settings."""
+
+    chroma_url_env_var: str = "CHROMA_URL"
+
+
 class LoggingConfig(BasePydanticModel):
     """Agent file logging settings."""
 
@@ -258,6 +264,7 @@ class ApplicationConfig(BasePydanticModel):
     environment: str
     model_providers: dict[str, ModelProviderConfig]
     supervisor: SupervisorConfig
+    indexing: IndexingConfig = Field(default_factory=IndexingConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
