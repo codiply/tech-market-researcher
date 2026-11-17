@@ -3,6 +3,8 @@
 from argparse import ArgumentParser
 from typing import Self
 
+from pydantic import Field, ValidationInfo, field_validator
+
 from evaluations.common.constants import (
     DEFAULT_AGENT_CONFIG_NAME,
     DEFAULT_EVALS_CONFIG_NAME,
@@ -14,6 +16,7 @@ from tech_market_researcher.core.arguments import (
     BaseCommandLineArguments,
     get_args,
 )
+from tech_market_researcher.core.collection_utils import find_duplicates
 
 
 class EvalsCommandLineArguments(BaseCommandLineArguments):
@@ -22,10 +25,40 @@ class EvalsCommandLineArguments(BaseCommandLineArguments):
     agent_config_name: str
     evals_config_name: str
     platform: EvalsPlatform
+    extra_mixins_evals: list[str] = Field(default_factory=list)
+    extra_mixins_agent: list[str] = Field(default_factory=list)
+
+    @field_validator("extra_mixins_evals", "extra_mixins_agent")
+    @classmethod
+    def _check_no_duplicate_extra_mixins(cls, value: list[str], info: ValidationInfo) -> list[str]:
+        duplicates = find_duplicates(value)
+        if duplicates:
+            raise ValueError(f"{info.field_name} must not contain duplicates: {', '.join(duplicates)}.")
+        return value
 
     @classmethod
     def add_arguments(cls: type[Self], parser: ArgumentParser) -> None:
         """Register the evaluations' command-line arguments on parser."""
+        parser.add_argument(
+            "--extra-mixins-evals",
+            "--x-mx-ev",
+            action="append",
+            default=[],
+            help=(
+                "Mixin from the evals config mixins folder applied on top of the evals config; "
+                "can be repeated, in order."
+            ),
+        )
+        parser.add_argument(
+            "--extra-mixins-agent",
+            "--x-mx-ag",
+            action="append",
+            default=[],
+            help=(
+                "Mixin from the agent config mixins folder applied on top of the agent config; "
+                "can be repeated, in order."
+            ),
+        )
         parser.add_argument(
             "--agent-config-name",
             default=DEFAULT_AGENT_CONFIG_NAME,
@@ -45,7 +78,10 @@ class EvalsCommandLineArguments(BaseCommandLineArguments):
 
     def as_agent_args(self) -> AgentCommandLineArguments:
         """Map these arguments to the researcher's agent command-line arguments."""
-        return AgentCommandLineArguments(config_name=self.agent_config_name)
+        return AgentCommandLineArguments(
+            config_name=self.agent_config_name,
+            extra_mixins=self.extra_mixins_agent,
+        )
 
 
 __all__ = ["EvalsCommandLineArguments", "get_args"]

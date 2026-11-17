@@ -199,6 +199,7 @@ Configs live in `config/` (agent configs under `config/agent/`) and are resolved
 1. **Common config** — `_common.yaml` (optional): the shared baseline shared by all configs.
 2. **Named config** — `X.yaml` (required): the per-environment config (e.g. `dev.yaml`, `prd.yaml`). A missing named file is an error.
 3. **Local override** — `X.local.yaml` (optional): machine-local tweaks. Ignored by `validate_all_configs` and git-ignored (`config/**/*.local.yaml`), so it is never committed.
+4. **Extra mixins** — optional mixins passed programmatically to `ConfigLoader.load` (e.g. via the `--extra-mixins` CLI flag of the agent and bootstrap commands, and `--extra-mixins-evals` / `--extra-mixins-agent` of the evaluations command); each entry references `mixins/<name>.yaml` and is applied on top of all the layers above, in the order given. A missing extra mixin file is an error.
 
 ```mermaid
 flowchart LR
@@ -208,6 +209,7 @@ flowchart LR
     named_mixins["mixins/*.yaml<br/>declared by X.yaml"]
     local["X.local.yaml<br/>(optional, not committed)"]
     local_mixins["mixins/*.yaml<br/>declared by X.local.yaml"]
+    extra_mixins["mixins/*.yaml<br/>extra mixins (programmatic, optional)"]
     merge["Deep merge<br/>later layers win"]
     validated["ApplicationConfig<br/>pydantic, extra=forbid"]
 
@@ -219,14 +221,28 @@ flowchart LR
     common_mixins --> merge
     named_mixins --> merge
     local_mixins --> merge
+    extra_mixins --> merge
     merge --> validated
 ```
 
 - **Deep merge** — dicts are merged recursively; scalars and arrays are replaced, never concatenated, so a later layer fully overrides a key.
-- **Mixins** — any of the three layers may declare a `_mixins` list; each entry references `mixins/<name>.yaml`, which is merged on top of the layer that declares it (in declaration order). Mixins let shared fragments be reused across configs and local overrides; the `_mixins` field itself is dropped before validation. The `mixins/` folder is committed like the rest of the configs.
+- **Mixins** — any of the three file layers may declare a `_mixins` list; each entry references `mixins/<name>.yaml`, which is merged on top of the layer that declares it (in declaration order). Mixins let shared fragments be reused across configs and local overrides; the `_mixins` field itself is dropped before validation and is not recursed into. The `mixins/` folder is committed like the rest of the configs.
 - **Validation** — the merged result is validated into a pydantic model (`ApplicationConfig` for the agent) with `extra="forbid"`, so a typo'd key in any YAML file fails at load time. `ConfigLoader.validate_all_configs()` loads every named config (without local overrides) so committed configs are checked by the unit tests and pre-commit.
 - **Local overrides** — files named `X.local.yaml` are the mechanism for per-machine changes (e.g. pointing `dev` at a different local model) without touching committed files.
 - **Loader configuration** — the loader is configurable via its constructor, e.g. base folder, common config filename, mixins folder, mixins field name, local-override infix, and file extension.
+
+### Extra mixins from the command line
+
+Every entry point can apply extra mixins to the config it loads, without editing the config files. The flags are repeatable and applied in the order given (later ones win on conflicts); duplicate names are rejected, and a missing mixin file is an error.
+
+| Command | Flag | Alias | Applies to | Mixins folder |
+| --- | --- | --- | --- | --- |
+| `agent_cli`, `agent_gradio_app`, `agent_textual_app` | `--extra-mixins` | `--x-mx` | the agent config | `config/agent/mixins/` |
+| `bootstrap` | `--extra-mixins` | `--x-mx` | the bootstrap config | `config/bootstrapping/mixins/` |
+| `evals` | `--extra-mixins-evals` | `--x-mx-ev` | the evaluations config | `config/evaluations/<platform>/mixins/` |
+| `evals` | `--extra-mixins-agent` | `--x-mx-ag` | the agent config | `config/agent/mixins/` |
+
+A mixin is a plain YAML fragment in the mixins folder of the config it applies to, containing only the keys it overrides; each flag repetition names one mixin file (without the `.yaml` extension), and the full flag name and its alias can be mixed freely.
 
 ## Developer Setup
 

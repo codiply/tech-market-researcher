@@ -118,7 +118,7 @@ sys.exit(0 if body.get("data") is not None and not body.get("errors") else 1)
 bootstrap() {
   wait_for_mlflow || return 1
   wait_for_phoenix || return 1
-  MLFLOW_TRACKING_USERNAME=bootstrap uv --directory "$ROOT" run bootstrap
+  MLFLOW_TRACKING_USERNAME=bootstrap uv --directory "$ROOT" run bootstrap "$@"
 }
 
 case "$cmd" in
@@ -129,7 +129,7 @@ case "$cmd" in
     exit $?
     ;;
   bootstrap)
-    bootstrap
+    bootstrap "$@"
     exit $?
     ;;
   build)

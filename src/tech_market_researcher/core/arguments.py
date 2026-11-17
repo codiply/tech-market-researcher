@@ -4,6 +4,9 @@ from abc import ABC, abstractmethod
 from argparse import ArgumentParser
 from typing import Self
 
+from pydantic import Field, field_validator
+
+from tech_market_researcher.core.collection_utils import find_duplicates
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.constants import (
     DEFAULT_CONFIG_NAME,
@@ -21,7 +24,32 @@ class BaseCommandLineArguments(ABC, BasePydanticModel):
         """Register the model's command-line arguments on parser."""
 
 
-class AgentCommandLineArguments(BaseCommandLineArguments):
+class ExtraMixinsCommandLineArguments(BaseCommandLineArguments):
+    """Base for argument classes whose config can be augmented with extra mixins."""
+
+    extra_mixins: list[str] = Field(default_factory=list)
+
+    @field_validator("extra_mixins")
+    @classmethod
+    def _check_no_duplicate_extra_mixins(cls, value: list[str]) -> list[str]:
+        duplicates = find_duplicates(value)
+        if duplicates:
+            raise ValueError(f"Extra mixins must not contain duplicates: {', '.join(duplicates)}.")
+        return value
+
+    @classmethod
+    def add_arguments(cls: type[Self], parser: ArgumentParser) -> None:
+        """Register the --extra-mixins argument on parser."""
+        parser.add_argument(
+            "--extra-mixins",
+            "--x-mx",
+            action="append",
+            default=[],
+            help="Mixin from the mixins folder applied on top of the loaded config; can be repeated, in order.",
+        )
+
+
+class AgentCommandLineArguments(ExtraMixinsCommandLineArguments):
     """Command-line arguments consumed by the agent."""
 
     config_name: str
@@ -29,6 +57,7 @@ class AgentCommandLineArguments(BaseCommandLineArguments):
     @classmethod
     def add_arguments(cls: type[AgentCommandLineArguments], parser: ArgumentParser) -> None:
         """Register the agent's command-line arguments on parser."""
+        super().add_arguments(parser)
         parser.add_argument(
             "--config-name",
             default=DEFAULT_CONFIG_NAME,

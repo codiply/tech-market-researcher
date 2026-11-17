@@ -97,14 +97,15 @@ async def create_agent(
     to the current event loop, and exiting it releases the agent's async resources (e.g. the
     connection pool).
     """
-    config = load_config(args.config_name)
+    config = load_config(args.config_name, args.extra_mixins)
     config = _apply_config_mutations(config, config_mutations_hooks)
     setup_agent_logging(config.logging)
     setup_observability(config.observability, config.environment)
     model_connection = config.get_model_connection_details(config.supervisor.model)
     logger.info(
-        "Creating agent: config=%s, environment=%s, model=%s",
+        "Creating agent: config=%s, extra_mixins=%s, environment=%s, model=%s",
         args.config_name,
+        args.extra_mixins,
         config.environment,
         model_connection.model_name,
     )

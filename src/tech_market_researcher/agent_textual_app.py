@@ -1,6 +1,7 @@
 """Textual web app for chatting with the agent, served in the browser via textual-serve."""
 
 import asyncio
+import shlex
 import sys
 import threading
 from typing import Any, Coroutine
@@ -270,7 +271,11 @@ def main() -> None:
     subprocess runs the app directly, so the server command must not call this function.
     """
     args = get_args(AgentCommandLineArguments)
-    command = f"{sys.executable} -m tech_market_researcher.agent_textual_app --config-name {args.config_name}"
+    command = (
+        f"{sys.executable} -m tech_market_researcher.agent_textual_app --config-name {shlex.quote(args.config_name)}"
+    )
+    for mixin in args.extra_mixins:
+        command += f" --extra-mixins {shlex.quote(mixin)}"
     # Bind all interfaces so the app is reachable over the Tailscale mesh; when a Tailscale
     # host name is configured, advertise it as the public URL so browsers on the mesh build
     # their websocket/static URLs against the right host.

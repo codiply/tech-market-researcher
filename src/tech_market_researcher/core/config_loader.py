@@ -1,5 +1,6 @@
 """Generic config loading."""
 
+import logging
 import shutil
 from pathlib import Path
 from typing import Any, Generic, TypeVar
@@ -7,10 +8,15 @@ from typing import Any, Generic, TypeVar
 import yaml
 from pydantic import BaseModel, field_validator
 
+from tech_market_researcher.core.collection_utils import find_duplicates
+
 ConfigT = TypeVar("ConfigT", bound=BaseModel)
+
+logger = logging.getLogger(__name__)
 
 # Debug dump folder names.
 WITH_MIXINS_FOLDER = "with_mixins"
+EXTRA_MIXINS_FOLDER = "extra_mixins"
 MERGED_FOLDER = "merged"
 
 
@@ -67,19 +73,38 @@ class ConfigLoader(Generic[ConfigT]):
             raise ValueError(f"Expected a mapping at the top level of {path}, got {type(data).__name__}.")
         return data
 
+    def _read_mixin(self, mixin_name: str) -> dict[str, Any]:
+        """Read a mixin by name from the mixins folder, dropping the mixins field."""
+        path = self._base_path / self._params.mixins_folder_name / f"{mixin_name}.{self._params.config_file_extension}"
+        if not path.exists():
+            raise FileNotFoundError(f"Mixin file not found: {path}")
+        mixin = self._read_yaml(path)
+        mixin.pop(self._params.mixins_field, None)
+        return mixin
+
     def _load_with_mixins(self, path: Path, debug_dir: Path | None) -> dict[str, Any]:
         """Load the config at path, deep-merged with its declared mixins in declaration order."""
         config = self._read_yaml(path)
-        mixins: list[dict[str, Any]] = []
-        for mixin_name in config.pop(self._params.mixins_field, []):
-            mixin = self._read_yaml(
-                self._base_path / self._params.mixins_folder_name / f"{mixin_name}.{self._params.config_file_extension}"
-            )
-            mixin.pop(self._params.mixins_field, None)
-            mixins.append(mixin)
+        mixins = [self._read_mixin(mixin_name) for mixin_name in config.pop(self._params.mixins_field, [])]
         rendered = deep_merge([config, *mixins])
         self._debug_dump_rendered_file_if_needed(debug_dir, f"{WITH_MIXINS_FOLDER}/{path.name}", rendered)
         return rendered
+
+    def _load_extra_mixins(self, extra_mixins: list[str] | None, debug_dir: Path | None) -> list[dict[str, Any]]:
+        """Load extra mixins from the mixins folder, in the given order, to be applied on top of everything else."""
+        duplicates = find_duplicates(extra_mixins or [])
+        if duplicates:
+            raise ValueError(f"Extra mixins must not contain duplicates: {', '.join(duplicates)}.")
+        mixins: list[dict[str, Any]] = []
+        for mixin_name in extra_mixins or ():
+            mixin = self._read_mixin(mixin_name)
+            self._debug_dump_rendered_file_if_needed(
+                debug_dir, f"{EXTRA_MIXINS_FOLDER}/{mixin_name}.{self._params.config_file_extension}", mixin
+            )
+            mixins.append(mixin)
+        if mixins:
+            logger.info("Applying %d extra mixin(s): %s", len(mixins), ", ".join(extra_mixins or ()))
+        return mixins
 
     def _prepare_debug_directory_if_needed(self, config_name: str) -> Path | None:
         """Return the effective debug dir (debug_dir_path/config_name), deleting any existing files there.
@@ -120,11 +145,14 @@ class ConfigLoader(Generic[ConfigT]):
                 continue
             self.load(config_name, include_local_overrides=False)
 
-    def load(self, config_name: str, include_local_overrides: bool = True) -> ConfigT:
+    def load(
+        self, config_name: str, extra_mixins: list[str] | None = None, include_local_overrides: bool = True
+    ) -> ConfigT:
         """Load and validate the config.
 
         Args:
             config_name: Name of the config to load.
+            extra_mixins: Names of mixins in the mixins folder, applied on top of all other layers, in order.
             include_local_overrides: When False, skip the <config_name>.<infix>.yaml override file.
         """
         if config_name == self._params.common_config_name:
@@ -150,6 +178,8 @@ class ConfigLoader(Generic[ConfigT]):
         local_path = self._base_path / f"{config_name}.{self._params.local_override_filename_infix}.{ext}"
         if include_local_overrides and local_path.exists():
             configs.append(self._load_with_mixins(local_path, debug_dir))
+        # Apply the extra mixins programmatically, on top of everything else
+        configs.extend(self._load_extra_mixins(extra_mixins, debug_dir))
 
         merged = deep_merge(configs)
 

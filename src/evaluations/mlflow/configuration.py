@@ -119,6 +119,6 @@ def get_config_loader() -> ConfigLoader:
 # pylint: enable=duplicate-code
 
 
-def load_config(name: str) -> MlflowEvaluationConfig:
-    """Load the evaluation config at config/evaluations/mlflow/<name>.yaml."""
-    return get_config_loader().load(name)
+def load_config(name: str, extra_mixins: list[str] | None = None) -> MlflowEvaluationConfig:
+    """Load the evaluation config at config/evaluations/mlflow/<name>.yaml, applying the extra mixins on top of it."""
+    return get_config_loader().load(name, extra_mixins=extra_mixins)

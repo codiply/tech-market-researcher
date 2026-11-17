@@ -30,10 +30,10 @@ def main() -> None:
     # The agent is created by the platform runner, on the event loop it runs the agent on.
     agent_args = eval_args.as_agent_args()
     if eval_args.platform == EvalsPlatform.MLLFLOW:
-        mlflow_config = load_mlflow_config(eval_args.evals_config_name)
+        mlflow_config = load_mlflow_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
         mlflow_evaluate(mlflow_config, agent_args, [_update_config])
     elif eval_args.platform == EvalsPlatform.PHOENIX:
-        phoenix_config = load_phoenix_config(eval_args.evals_config_name)
+        phoenix_config = load_phoenix_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
         phoenix_evaluate(phoenix_config, agent_args, [_update_config])
     else:
         raise NotImplementedError(f"Platform '{eval_args.platform.value}' is not implemented yet.")

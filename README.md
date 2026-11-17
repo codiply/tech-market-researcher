@@ -40,7 +40,7 @@ The Chroma Admin UI is stateless: its setup page (shown until you save settings,
 uv run agent_cli
 ```
 
-Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
+Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--extra-mixins` (alias `--x-mx`; mixin from `config/agent/mixins/` applied on top of the loaded config, repeatable in order, e.g. `--x-mx bedrock-nova-lite`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
 
 ### Gradio App
 
@@ -48,7 +48,7 @@ Starts an interactive chat REPL against the MLflow AI Gateway configured in `.en
 uv run agent_gradio_app
 ```
 
-Starts a [Gradio](https://gradio.app) chat web UI for the agent on port `8899`, listening on `0.0.0.0`, so it is reachable at `http://localhost:8899`. The only flag is `--config-name` (same semantics as the CLI); user id, session id and time zone are fixed to their defaults.
+Starts a [Gradio](https://gradio.app) chat web UI for the agent on port `8899`, listening on `0.0.0.0`, so it is reachable at `http://localhost:8899`. The flags are `--config-name` and `--extra-mixins` (alias `--x-mx`; same semantics as the CLI); user id, session id and time zone are fixed to their defaults.
 
 ### Textual App
 
@@ -56,7 +56,7 @@ Starts a [Gradio](https://gradio.app) chat web UI for the agent on port `8899`, 
 uv run agent_textual_app
 ```
 
-Starts a [Textual](https://github.com/Textualize/textual) chat web UI for the agent on port `8898`, served to a browser by [textual-serve](https://pypi.org/project/textual-serve/); each browser connection runs its own app instance. It listens on `0.0.0.0`, so it is reachable at `http://localhost:8898`; when `TAILSCALE_HOST_NAME` is set in `.env` it also advertises that host as its public URL, so devices on the Tailscale mesh can reach it. The only flag is `--config-name` (same semantics as the CLI); user id, session id and time zone are selected in the UI.
+Starts a [Textual](https://github.com/Textualize/textual) chat web UI for the agent on port `8898`, served to a browser by [textual-serve](https://pypi.org/project/textual-serve/); each browser connection runs its own app instance. It listens on `0.0.0.0`, so it is reachable at `http://localhost:8898`; when `TAILSCALE_HOST_NAME` is set in `.env` it also advertises that host as its public URL, so devices on the Tailscale mesh can reach it. The flags are `--config-name` and `--extra-mixins` (alias `--x-mx`; same semantics as the CLI); user id, session id and time zone are selected in the UI.
 
 ## Run the evaluations
 
@@ -64,7 +64,7 @@ Starts a [Textual](https://github.com/Textualize/textual) chat web UI for the ag
 uv run evals
 ```
 
-Runs the agent against an evaluation dataset; each record is scored by the configured evaluators — LLM judges served through the AI Gateway, plus platform-specific code evaluators (e.g. exact match and regex checks on Phoenix). The platform is selected with `--platform` (`mlflow`, default, or `phoenix`): with `mlflow` the results are stored as MLflow evaluation runs under the dataset's experiment, and with `phoenix` they are stored as a Phoenix experiment attached to the dataset. Flags: `--agent-config-name` (name of the agent config to load, default `base`), `--evals-config-name` (name of the evaluation config under `config/evaluations/<platform>/`, default `main`), and `--platform` (`mlflow` or `phoenix`, default `mlflow`). Requires the docker compose stack to be running and the dataset to have been bootstrapped.
+Runs the agent against an evaluation dataset; each record is scored by the configured evaluators — LLM judges served through the AI Gateway, plus platform-specific code evaluators (e.g. exact match and regex checks on Phoenix). The platform is selected with `--platform` (`mlflow`, default, or `phoenix`): with `mlflow` the results are stored as MLflow evaluation runs under the dataset's experiment, and with `phoenix` they are stored as a Phoenix experiment attached to the dataset. Flags: `--agent-config-name` (name of the agent config to load, default `base`), `--evals-config-name` (name of the evaluation config under `config/evaluations/<platform>/`, default `main`), `--platform` (`mlflow` or `phoenix`, default `mlflow`), `--extra-mixins-evals` (alias `--x-mx-ev`; mixin from `config/evaluations/<platform>/mixins/` applied on top of the evals config) and `--extra-mixins-agent` (alias `--x-mx-ag`; mixin from `config/agent/mixins/` applied on top of the agent config) — both repeatable in order, e.g. `uv run evals --x-mx-ev bedrock-nova-lite --x-mx-ag bedrock-nova-lite`. Requires the docker compose stack to be running and the dataset to have been bootstrapped.
 
 ## Common commands
 
@@ -72,7 +72,7 @@ Runs the agent against an evaluation dataset; each record is scored by the confi
 ./stack.sh ps                      # status
 ./stack.sh logs -f mlflow_server   # follow one service
 ./stack.sh down                    # stop and remove containers
-./stack.sh bootstrap               # re-run the (idempotent) bootstrap, e.g. after updating its config
+./stack.sh bootstrap               # re-run the (idempotent) bootstrap, e.g. after updating its config; forwards extra args (e.g. `--x-mx <name>` to apply an extra mixin)
 ```
 
 ## Pre-commit hooks

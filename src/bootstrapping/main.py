@@ -4,6 +4,7 @@ import logging
 
 from dotenv import load_dotenv
 
+from bootstrapping.common.arguments import BootstrapCommandLineArguments, get_args
 from bootstrapping.common.configuration import load_config
 from bootstrapping.resources.mlflow.ai_gateway import bootstrap_mlflow_ai_gateway
 from bootstrapping.resources.mlflow.experiments import bootstrap_mlflow_experiments
@@ -16,7 +17,8 @@ def main() -> None:
     """Provision the stack's resources from config."""
     load_dotenv()
     logging.basicConfig(level=logging.INFO)
-    config = load_config("main")
+    args = get_args(BootstrapCommandLineArguments)
+    config = load_config("main", args.extra_mixins)
     bootstrap_s3(config)
     # The gateway's artifact root is s3://mlflow-artifacts, so the bucket must exist first.
     bootstrap_mlflow_ai_gateway(config)

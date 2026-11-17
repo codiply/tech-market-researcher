@@ -52,6 +52,7 @@ class Scenario:
     error: type[Exception] | None = None
     params: ConfigLoaderParams = field(default_factory=ConfigLoaderParams)
     config_name: str = "dev"
+    extra_mixins: list[str] | None = None
     expected_dump: dict | None = None
 
 
@@ -105,6 +106,18 @@ SCENARIOS: dict[str, Scenario] = {
             "dev/merged/dev.yaml": {"model": {"name": "local-model"}, "search": {"provider": "beta"}},
         },
     ),
+    "extra_mixins": Scenario(
+        expected={"a": 1, "provider": "beta", "theme": "light"},
+        extra_mixins=["theme_mix", "override_mix"],
+        expected_dump={
+            "dev/with_mixins/dev.yaml": {"a": 1, "provider": "beta"},
+            "dev/extra_mixins/theme_mix.yaml": {"theme": "dark"},
+            "dev/extra_mixins/override_mix.yaml": {"theme": "light"},
+            "dev/merged/dev.yaml": {"a": 1, "provider": "beta", "theme": "light"},
+        },
+    ),
+    "extra_mixins_duplicate": Scenario(error=ValueError, extra_mixins=["m", "m"]),
+    "extra_mixins_missing": Scenario(error=FileNotFoundError, extra_mixins=["missing"]),
     "lists_replaced": Scenario(
         expected={"tags": ["c"]},
         expected_dump={
@@ -153,9 +166,9 @@ def test_load_scenario(folder: Path) -> None:
     loader = ConfigLoader(SampleConfig, folder, params=scenario.params)
     if scenario.error:
         with pytest.raises(scenario.error):
-            loader.load(scenario.config_name)
+            loader.load(scenario.config_name, extra_mixins=scenario.extra_mixins)
     else:
-        assert loader.load(scenario.config_name).model_dump() == scenario.expected
+        assert loader.load(scenario.config_name, extra_mixins=scenario.extra_mixins).model_dump() == scenario.expected
 
 
 def _write_yaml(path: Path, data: dict) -> None:
@@ -211,7 +224,7 @@ def test_debug_dump(tmp_path: Path, folder: str) -> None:
     scenario = SCENARIOS[folder]
     params = scenario.params.model_copy(update={"debug_dir_path": tmp_path / "debug"})
     loader = ConfigLoader(SampleConfig, SCENARIOS_DIR / folder, params=params)
-    assert loader.load(scenario.config_name).model_dump() == scenario.expected
+    assert loader.load(scenario.config_name, extra_mixins=scenario.extra_mixins).model_dump() == scenario.expected
     debug_dir = tmp_path / "debug" / scenario.config_name
     dumped = {
         p.relative_to(tmp_path / "debug").as_posix(): yaml.safe_load(p.read_text())
@@ -232,6 +245,6 @@ def test_no_debug_dir_dumps_nothing(folder: str) -> None:
     config_dir = SCENARIOS_DIR / folder
     before = {p.relative_to(config_dir).as_posix() for p in config_dir.rglob("*")}
     loader = ConfigLoader(SampleConfig, config_dir, params=scenario.params)
-    assert loader.load(scenario.config_name).model_dump() == scenario.expected
+    assert loader.load(scenario.config_name, extra_mixins=scenario.extra_mixins).model_dump() == scenario.expected
     after = {p.relative_to(config_dir).as_posix() for p in config_dir.rglob("*")}
     assert after == before
