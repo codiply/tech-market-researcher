@@ -227,6 +227,11 @@ class IndexingConfig(BasePydanticModel):
     """Vector index (Chroma) connection settings."""
 
     chroma_url_env_var: str = "CHROMA_URL"
+    # Suffix every collection name with the conversation's thread id, so each
+    # conversation reads from and writes to its own collections.
+    do_suffix_collection_name_with_thread_id: bool = False
+    # Extra metadata recorded on every collection the agent creates.
+    additional_collection_metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class LoggingConfig(BasePydanticModel):

@@ -80,7 +80,7 @@ flowchart LR
 ```
 
 - **Agent** — an agent built on [LangChain](https://www.langchain.com) [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent), run interactively from the CLI or from a web UI (a [Gradio](https://gradio.app) app or a [Textual](https://github.com/Textualize/textual) app; see Developer Setup). LLM requests go through the [MLflow](https://mlflow.org) AI Gateway; every run is traced back to MLflow and Phoenix. The conversation state is checkpointed by the LangGraph checkpointer, selected in the agent config: in-memory (per process) or Postgres, stored in a dedicated schema of the agent database so the conversation persists across UI restarts. Filesystem tools are backed by a dedicated on-disk directory in virtual mode, so the agent's file operations are confined to its own storage area (with a cap on the size of individual files it can read).
-- **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Phoenix** (datasets and results are stored as a Phoenix experiment in Phoenix). When the agent is run from the evaluations, its web page index points at the dedicated `chroma_evals` Chroma instance instead of the main one, so evaluation runs do not pollute the agent's own index.
+- **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Phoenix** (datasets and results are stored as a Phoenix experiment in Phoenix). When the agent is run from the evaluations, its web page index points at the dedicated `chroma_evals` Chroma instance instead of the main one, so evaluation runs do not pollute the agent's own index (see Evals vector store isolation).
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces. It also monitors token usage and cost in real time, and supports budgets that cap spending, so a runaway agent run can't keep consuming tokens and money indefinitely.
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.
 - **Web page index** — the agent indexes web pages in the Chroma vector store and queries them with similarity search; documents are embedded by the OMLX embeddings endpoint, called directly by the agent (the AI Gateway does not proxy embeddings).
@@ -194,6 +194,16 @@ Applicability criterion per evaluator:
 | `refusal` | Always applicable. |
 | `toxicity` | Always applicable. |
 | `user_friction` | Always applicable. |
+
+### Evals vector store isolation
+
+The evals and the agent must never write to the same vector store, for two independent reasons. First, the evaluations must not pollute the index the agent itself relies on in regular ("production") runs: evaluation runs index a lot of page content that would otherwise leak into the agent's normal retrieval. Second, the evaluations must not depend on — or be influenced by — data that pre-exists in the agent's index, so the evaluation results reflect only what the agent does during the evaluation run.
+
+The first reason is handled by pointing the evals at a different database: when the agent is run from the evaluations, its web page index is pointed at the dedicated `chroma_evals` Chroma instance instead of the main `chroma` one.
+
+The second reason is handled by isolating each conversation: every collection the index tools use is suffixed with the conversation's thread id (the user id plus the session id). Evaluation records run as separate conversations (each record gets its own session id by default), so each record reads from and writes to its own collections, and one conversation does not influence the results of another — an evaluation record cannot retrieve pages that a different record indexed.
+
+As an extra measure, every collection the agent creates during an evaluation run is tagged with `created_during_evals: "true"`, and when the run finishes (even if it fails), the evals code deletes every collection in the Chroma database it used that carries that tag. This makes the deletion safe even if someone points the evals at the production Chroma database by mistake: only the collections created during the evals run are deleted, and everything else is left untouched.
 
 ## Configuration
 

@@ -8,6 +8,7 @@ load_dotenv()
 # AI Gateway and its clients read env vars at import time.
 # pylint: disable=wrong-import-position
 from evaluations.common.arguments import EvalsCommandLineArguments, get_args
+from evaluations.common.cleanup import cleanup_evals_collections
 from evaluations.common.constants import EVALS_AGENT_MIXIN, EVALS_ENVIRONMENT, EvalsPlatform
 from evaluations.mlflow.configuration import load_config as load_mlflow_config
 from evaluations.mlflow.evaluate import mlflow_evaluate
@@ -32,14 +33,19 @@ def main() -> None:
     # The evals mixin is injected into the agent config loader so eval runs write their logs
     # to a separate directory from regular agent runs.
     agent_args.extra_mixins = [*agent_args.extra_mixins, EVALS_AGENT_MIXIN]
-    if eval_args.platform == EvalsPlatform.MLLFLOW:
-        mlflow_config = load_mlflow_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
-        mlflow_evaluate(mlflow_config, agent_args, [_update_config])
-    elif eval_args.platform == EvalsPlatform.PHOENIX:
-        phoenix_config = load_phoenix_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
-        phoenix_evaluate(phoenix_config, agent_args, [_update_config])
-    else:
-        raise NotImplementedError(f"Platform '{eval_args.platform.value}' is not implemented yet.")
+    try:
+        if eval_args.platform == EvalsPlatform.MLLFLOW:
+            mlflow_config = load_mlflow_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
+            mlflow_evaluate(mlflow_config, agent_args, [_update_config])
+        elif eval_args.platform == EvalsPlatform.PHOENIX:
+            phoenix_config = load_phoenix_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
+            phoenix_evaluate(phoenix_config, agent_args, [_update_config])
+        else:
+            raise NotImplementedError(f"Platform '{eval_args.platform.value}' is not implemented yet.")
+    finally:
+        # Evals pollute the evals vector store, so delete the collections the agent tagged
+        # during the run, even when the evaluation itself failed.
+        cleanup_evals_collections(agent_args)
 
 
 if __name__ == "__main__":

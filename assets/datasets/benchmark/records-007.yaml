@@ -1,0 +1,12 @@
+- input:
+    messages:
+    - role: user
+      content: >-
+        Store the web page https://example.com in the web page index, so you can recall its
+        content later without fetching it again.
+  expected_tool_calls:
+  - name: web_page_index_upsert
+    arguments:
+      document_id: https://example.com
+  tags:
+    capability_under_test: web_page_index_upsert

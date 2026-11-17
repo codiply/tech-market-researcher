@@ -7,14 +7,18 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import mlflow
+from chromadb.api.models.AsyncCollection import AsyncCollection
+from langchain.tools import ToolRuntime
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field, create_model, model_validator
 
 from tech_market_researcher.capabilities.chunking import get_token_encoder, split_text_into_chunks
+from tech_market_researcher.core.common import AgentRuntimeContext
 from tech_market_researcher.core.configuration import ModelConnectionDetails
 from tech_market_researcher.integrations.chroma import (
     ChromaDocument,
     EmbeddingModelMismatchBehavior,
+    collection_name_for_thread,
     delete_where,
     get_or_create_collection,
 )
@@ -56,6 +60,12 @@ class IndexToolsParams(BaseModel):
     document_fetcher: Callable[[str], str | Awaitable[str]] | None = None
     chunk_size_tokens: int | None = None
     chunk_overlap_tokens: int = 50
+    # Suffix the collection name with the conversation's thread id, so each conversation
+    # reads from and writes to its own collection. The tools then resolve the collection
+    # at call time, from the tool runtime's context, instead of up front.
+    do_suffix_collection_name_with_thread_id: bool = False
+    # Extra metadata recorded on every collection created for the tools.
+    additional_collection_metadata: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _validate_document_fetcher_fields(self) -> "IndexToolsParams":
@@ -118,8 +128,17 @@ def _metadata_from_args(
     return metadata
 
 
-def _build_upsert_docstring(params: IndexToolsParams, parameters: list[MetadataParameter]) -> str:
+def _build_upsert_docstring(
+    params: IndexToolsParams, parameters: list[MetadataParameter], per_conversation: bool = False
+) -> str:
     """Build the upsert tool docstring, including the collection description and argument docs."""
+    collection_sentence = (
+        f"Add a document to the {params.collection_name} collection for this conversation, "
+        "replacing any existing records of the same ID. Only the current conversation's documents are visible."
+        if per_conversation
+        else f"Add a document to the {params.collection_name} collection, "
+        "replacing any existing records of the same ID."
+    )
     if params.document_fetcher is not None:
         document_section_lines = [
             "The document content is fetched server-side from the given document ID and stored "
@@ -132,8 +151,7 @@ def _build_upsert_docstring(params: IndexToolsParams, parameters: list[MetadataP
         document_args_lines = [f"    document: {params.document_description}"]
     return "\n".join(
         [
-            f"Add a document to the {params.collection_name} collection, "
-            "replacing any existing records of the same ID.",
+            collection_sentence,
             "",
             "About this collection:",
             params.collection_description,
@@ -149,11 +167,17 @@ def _build_upsert_docstring(params: IndexToolsParams, parameters: list[MetadataP
     )
 
 
-def _build_query_docstring(params: IndexToolsParams) -> str:
+def _build_query_docstring(params: IndexToolsParams, per_conversation: bool = False) -> str:
     """Build the query tool docstring, including the collection description."""
+    collection_sentence = (
+        f"Retrieve the documents most relevant to a query from the {params.collection_name} collection "
+        "for this conversation. Only the current conversation's documents are visible."
+        if per_conversation
+        else f"Retrieve the documents most relevant to a query from the {params.collection_name} collection."
+    )
     return "\n".join(
         [
-            f"Retrieve the documents most relevant to a query from the {params.collection_name} collection.",
+            collection_sentence,
             "",
             "About this collection:",
             params.collection_description,
@@ -175,8 +199,11 @@ async def build_index_tools(
     """Return the index upsert and query tools for the named Chroma collection.
 
     The tool names are the prefix (a trailing underscore is added if missing)
-    followed by the upsert/query suffixes. The collection is fetched (or
-    created) up front. The collection description is injected into the
+    followed by the upsert/query suffixes. The collection is resolved on every call
+    through a conversation-collection helper: when the collection name is suffixed with
+    the thread id, each call resolves the conversation's own collection from the tool
+    runtime's context; otherwise the same helper returns the single collection fetched
+    (or created) up front. The collection description is injected into the
     docstrings of the generated tools. Each metadata parameter is exposed as
     a dedicated optional `metadata_<name>` argument of the upsert tool whose
     value is stored under the parameter's name in the record's metadata."""
@@ -184,25 +211,51 @@ async def build_index_tools(
     tool_name_prefix = params.tool_name_prefix
     if not tool_name_prefix.endswith("_"):
         tool_name_prefix += "_"
-    collection = await get_or_create_collection(
-        chroma_client,
-        params.collection_name,
-        params.embeddings_model,
-        EmbeddingModelMismatchBehavior.RAISE,
-    )
+    if params.do_suffix_collection_name_with_thread_id:
+
+        async def _get_conversation_collection(
+            runtime: ToolRuntime[AgentRuntimeContext],
+        ) -> AsyncCollection:
+            collection_name = collection_name_for_thread(params.collection_name, runtime.context.thread_id)
+            return await get_or_create_collection(
+                chroma_client,
+                collection_name,
+                params.embeddings_model,
+                EmbeddingModelMismatchBehavior.RAISE,
+                additional_metadata=params.additional_collection_metadata,
+            )
+
+    else:
+        # Without per-thread scoping all conversations share a single collection, so it is
+        # fetched (or created) once up front and the runtime is ignored.
+        shared_collection = await get_or_create_collection(
+            chroma_client,
+            params.collection_name,
+            params.embeddings_model,
+            EmbeddingModelMismatchBehavior.RAISE,
+            additional_metadata=params.additional_collection_metadata,
+        )
+
+        async def _get_conversation_collection(
+            runtime: ToolRuntime[AgentRuntimeContext],  # pylint: disable=unused-argument
+        ) -> AsyncCollection:
+            return shared_collection
+
     token_encoder = get_token_encoder() if params.chunk_size_tokens is not None else None
     query_span_name = f"{tool_name_prefix}{INDEXING_TOOL_NAME_QUERY_SUFFIX}"
 
-    async def upsert_index(document: str, document_id: str | None = None, **metadata_fields: str) -> str:
+    async def upsert_index(
+        collection: AsyncCollection, document: str, document_id: str | None = None, **metadata_fields: str
+    ) -> str:
         metadata = _metadata_from_args(metadata_fields, parameters)
         record_id = document_id or str(uuid.uuid4())
-        logger.info("Upserting 1 document into collection '%s' (id=%s)", params.collection_name, record_id)
+        logger.info("Upserting 1 document into collection '%s' (id=%s)", collection.name, record_id)
         await upsert_documents(collection, [ChromaDocument(id=record_id, document=document, metadata=metadata)])
         return f"Stored document with id {record_id}"
 
-    async def upsert_index_fetched(document_id: str, **metadata_fields: str) -> str:
+    async def upsert_index_fetched(collection: AsyncCollection, document_id: str, **metadata_fields: str) -> str:
         assert params.document_fetcher is not None
-        logger.info("Fetching and indexing document %s into collection '%s'", document_id, params.collection_name)
+        logger.info("Fetching and indexing document %s into collection '%s'", document_id, collection.name)
         content = params.document_fetcher(document_id)
         if inspect.isawaitable(content):
             content = await content
@@ -234,18 +287,19 @@ async def build_index_tools(
         logger.debug(
             "Upserting %d document(s) into collection '%s' (document_id=%s)",
             len(documents),
-            params.collection_name,
+            collection.name,
             document_id,
         )
         await upsert_documents(collection, documents)
         return f"Stored document with id {document_id}{chunk_suffix}"
 
     async def query_index(
+        collection: AsyncCollection,
         query: str,
         max_results: int = QUERY_INDEX_MAX_RESULTS_DEFAULT,
     ) -> str:
         effective_max_results = min(max_results, QUERY_INDEX_MAX_RESULTS_MAX)
-        logger.info("Querying collection '%s' (max_results=%d)", params.collection_name, effective_max_results)
+        logger.info("Querying collection '%s' (max_results=%d)", collection.name, effective_max_results)
         with mlflow.start_span(name=query_span_name, span_type="RETRIEVER") as span:
             span.set_inputs({"query": query, "max_results": effective_max_results})
             result = await chroma_query(collection, query, n_results=effective_max_results)
@@ -265,15 +319,37 @@ async def build_index_tools(
         ]
         return f"Found {len(items)} result(s) for '{query}':\n\n" + "\n\n".join(result_texts)
 
+    async def upsert_tool_fn(
+        runtime: ToolRuntime[AgentRuntimeContext],
+        document: str | None = None,
+        document_id: str | None = None,
+        **metadata_fields: str,
+    ) -> str:
+        collection = await _get_conversation_collection(runtime)
+        if params.document_fetcher is not None:
+            assert document_id is not None, "document_id is required when the document is fetched from a URL"
+            return await upsert_index_fetched(collection, document_id, **metadata_fields)
+        assert document is not None
+        return await upsert_index(collection, document, document_id, **metadata_fields)
+
+    async def query_tool_fn(
+        runtime: ToolRuntime[AgentRuntimeContext],
+        query: str,
+        max_results: int = QUERY_INDEX_MAX_RESULTS_DEFAULT,
+    ) -> str:
+        return await query_index(await _get_conversation_collection(runtime), query, max_results)
+
     upsert_tool = StructuredTool.from_function(
-        coroutine=upsert_index_fetched if params.document_fetcher is not None else upsert_index,
+        coroutine=upsert_tool_fn,
         name=f"{tool_name_prefix}{INDEXING_TOOL_NAME_UPSERT_SUFFIX}",
-        description=_build_upsert_docstring(params, parameters),
+        description=_build_upsert_docstring(
+            params, parameters, per_conversation=params.do_suffix_collection_name_with_thread_id
+        ),
         args_schema=_build_upsert_args_model(params),
     )
     query_tool = StructuredTool.from_function(
-        coroutine=query_index,
+        coroutine=query_tool_fn,
         name=f"{tool_name_prefix}{INDEXING_TOOL_NAME_QUERY_SUFFIX}",
-        description=_build_query_docstring(params),
+        description=_build_query_docstring(params, per_conversation=params.do_suffix_collection_name_with_thread_id),
     )
     return [upsert_tool, query_tool]

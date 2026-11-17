@@ -1,4 +1,10 @@
 indexing:
   chroma_url_env_var: CHROMA_EVALS_URL
+  # Scope every collection to the conversation's thread id, so one conversation
+  # cannot influence the results of another.
+  do_suffix_collection_name_with_thread_id: true
+  # Tag every collection the agent creates, so the evals cleanup can delete exactly those.
+  additional_collection_metadata:
+    created_during_evals: "true"
 logging:
   directory: .storage/evals/agent/logs

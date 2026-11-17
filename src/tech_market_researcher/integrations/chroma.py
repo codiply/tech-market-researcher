@@ -2,7 +2,8 @@
 
 import logging
 import os
-from collections.abc import Sequence
+import re
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from enum import StrEnum
 from typing import cast
@@ -28,7 +29,20 @@ EMBEDDINGS_COMPUTED_AT_METADATA_KEY = "_embeddings_computed_at"
 
 DEFAULT_QUERY_N_RESULTS = 10
 
+# Chroma collection names only allow letters, digits, dots, underscores and dashes.
+_COLLECTION_NAME_INVALID_CHARS = re.compile(r"[^a-zA-Z0-9._-]")
+
 logger = logging.getLogger(__name__)
+
+
+def collection_name_for_thread(base_name: str, thread_id: str) -> str:
+    """Scope a collection name to a conversation thread.
+
+    The thread id is suffixed, separated from the base name by the `-.-` separator and
+    sanitized of the characters Chroma does not allow in collection names, so each
+    conversation reads from and writes to its own collection.
+    """
+    return f"{base_name}-.-{_COLLECTION_NAME_INVALID_CHARS.sub('-', thread_id)}"
 
 
 class EmbeddingModelMismatchBehavior(StrEnum):
@@ -106,12 +120,13 @@ async def get_or_create_collection(
     name: str,
     embeddings_model: ModelConnectionDetails,
     mismatch_behavior: EmbeddingModelMismatchBehavior,
+    additional_metadata: Mapping[str, str] | None = None,
 ) -> AsyncCollection:
     """Fetch a collection by name, creating it if it does not exist.
 
     New collections are created with an OpenAIEmbeddingFunction for the given embedding
     model, so documents get embedded on add. The model name is recorded in the
-    collection metadata.
+    collection metadata, together with any additional_metadata.
     """
     embedding_function = _build_embedding_function(embeddings_model)
     collection = await _get_collection(client, name, embedding_function)
@@ -131,8 +146,23 @@ async def get_or_create_collection(
     return await client.create_collection(
         name=name,
         embedding_function=embedding_function,
-        metadata={EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model.model_name},
+        metadata={EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model.model_name, **(additional_metadata or {})},
     )
+
+
+async def delete_collections_with_metadata(client: AsyncClientAPI, metadata: Mapping[str, str]) -> int:
+    """Delete every collection whose metadata contains all the given key-value pairs.
+
+    Collections whose metadata does not match every pair are left untouched.
+    Returns the number of collections deleted.
+    """
+    deleted = 0
+    for collection in await client.list_collections():
+        if all((collection.metadata or {}).get(key) == value for key, value in metadata.items()):
+            logger.info("Deleting collection '%s' (metadata matches %s)", collection.name, dict(metadata))
+            await client.delete_collection(collection.name)
+            deleted += 1
+    return deleted
 
 
 async def delete_where(collection: AsyncCollection, where: Where) -> None:

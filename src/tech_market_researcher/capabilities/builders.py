@@ -80,6 +80,8 @@ async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
                     document_fetcher=fetch_as_markdown,
                     chunk_size_tokens=indexer.chunk_size_tokens,
                     chunk_overlap_tokens=indexer.chunk_overlap_tokens,
+                    do_suffix_collection_name_with_thread_id=config.indexing.do_suffix_collection_name_with_thread_id,
+                    additional_collection_metadata=config.indexing.additional_collection_metadata,
                 ),
             )
         )
