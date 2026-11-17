@@ -8,7 +8,7 @@ load_dotenv()
 # AI Gateway and its clients read env vars at import time.
 # pylint: disable=wrong-import-position
 from evaluations.common.arguments import EvalsCommandLineArguments, get_args
-from evaluations.common.constants import EVALS_ENVIRONMENT, EvalsPlatform
+from evaluations.common.constants import EVALS_AGENT_MIXIN, EVALS_ENVIRONMENT, EvalsPlatform
 from evaluations.mlflow.configuration import load_config as load_mlflow_config
 from evaluations.mlflow.evaluate import mlflow_evaluate
 from evaluations.phoenix.configuration import load_config as load_phoenix_config
@@ -29,6 +29,9 @@ def main() -> None:
     eval_args = get_args(EvalsCommandLineArguments)
     # The agent is created by the platform runner, on the event loop it runs the agent on.
     agent_args = eval_args.as_agent_args()
+    # The evals mixin is injected into the agent config loader so eval runs write their logs
+    # to a separate directory from regular agent runs.
+    agent_args.extra_mixins = [*agent_args.extra_mixins, EVALS_AGENT_MIXIN]
     if eval_args.platform == EvalsPlatform.MLLFLOW:
         mlflow_config = load_mlflow_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
         mlflow_evaluate(mlflow_config, agent_args, [_update_config])

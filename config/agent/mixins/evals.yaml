@@ -1,0 +1,2 @@
+logging:
+  directory: .storage/evals/agent/logs
