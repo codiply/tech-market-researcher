@@ -24,6 +24,9 @@ AGENT_BACKEND_ROOT_DIR = Path(".storage/agent/backend")
 # Defaults for the agent's file logging (see LoggingConfig).
 AGENT_DEFAULT_LOGS_DIR = Path(".storage/agent/logs")
 AGENT_DEFAULT_LOG_LEVEL = "INFO"
+AGENT_DEFAULT_LOG_ROTATION_WHEN = "midnight"
+AGENT_DEFAULT_LOG_ROTATION_BACKUP_COUNT = 14
+AGENT_DEFAULT_LOG_ROTATION_MAX_SIZE_MB = 10.0
 AGENT_LOG_FILE_NAME = "agent.log"
 # Maximum size of a single file the agent can read, in megabytes.
 AGENT_BACKEND_MAX_FILE_SIZE_MB = 10

@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from enum import Enum
 from pathlib import Path
 
@@ -11,6 +12,9 @@ from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
 from tech_market_researcher.core.constants import (
     AGENT_DEFAULT_LOG_LEVEL,
+    AGENT_DEFAULT_LOG_ROTATION_BACKUP_COUNT,
+    AGENT_DEFAULT_LOG_ROTATION_MAX_SIZE_MB,
+    AGENT_DEFAULT_LOG_ROTATION_WHEN,
     AGENT_DEFAULT_LOGS_DIR,
     ARCHIVE_RENDERED_CONFIGS_ENV_VAR,
     BASE_DEBUG_DIR_PATH,
@@ -251,12 +255,41 @@ class LoggingConfig(BasePydanticModel):
 
     directory: Path = AGENT_DEFAULT_LOGS_DIR
     level: str = AGENT_DEFAULT_LOG_LEVEL
+    # Rollover schedule passed to TimedRotatingFileHandler: "midnight"/"D", "H", "M", "S",
+    # or "W0"-"W6" (weekly, Monday-Sunday).
+    rotation_when: str = AGENT_DEFAULT_LOG_ROTATION_WHEN
+    # Number of rotated log files kept alongside the current one.
+    rotation_backup_count: int = AGENT_DEFAULT_LOG_ROTATION_BACKUP_COUNT
+    # Size cap in megabytes that also triggers a rollover of the current log file.
+    rotation_max_size_mb: float = AGENT_DEFAULT_LOG_ROTATION_MAX_SIZE_MB
 
     @model_validator(mode="after")
     def _check_level(self) -> "LoggingConfig":
         valid = sorted(logging.getLevelNamesMapping())
         if self.level.upper() not in logging.getLevelNamesMapping():
             raise ValueError(f"level must be one of {valid}, got '{self.level}'.")
+        return self
+
+    @model_validator(mode="after")
+    def _check_rotation_when(self) -> "LoggingConfig":
+        if self.rotation_when.upper() not in ("S", "M", "H", "D", "MIDNIGHT") and not re.fullmatch(
+            r"W[0-6]", self.rotation_when.upper()
+        ):
+            raise ValueError(
+                f"rotation_when must be one of S, M, H, D, midnight, or W0-W6, got '{self.rotation_when}'."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _check_rotation_backup_count(self) -> "LoggingConfig":
+        if self.rotation_backup_count < 0:
+            raise ValueError(f"rotation_backup_count must be >= 0, got {self.rotation_backup_count}.")
+        return self
+
+    @model_validator(mode="after")
+    def _check_rotation_max_size_mb(self) -> "LoggingConfig":
+        if self.rotation_max_size_mb <= 0:
+            raise ValueError(f"rotation_max_size_mb must be > 0, got {self.rotation_max_size_mb}.")
         return self
 
 

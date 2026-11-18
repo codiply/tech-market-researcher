@@ -45,6 +45,9 @@ indexing:
 logging:
   directory: .storage/agent/logs
   level: DEBUG
+  rotation_when: midnight
+  rotation_backup_count: 365
+  rotation_max_size_mb: 10.0
 observability:
   mlflow:
     enabled: true
