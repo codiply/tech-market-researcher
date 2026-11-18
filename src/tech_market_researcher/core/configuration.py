@@ -234,6 +234,18 @@ class IndexingConfig(BasePydanticModel):
     additional_collection_metadata: dict[str, str] = Field(default_factory=dict)
 
 
+class ToolDefinitionsDebugConfig(BasePydanticModel):
+    """Tool-definitions dump settings. Omit the section (or set enabled: false) to disable."""
+
+    enabled: bool = False
+
+
+class DebugConfig(BasePydanticModel):
+    """Debug dumps written under the .debug folder. Omit the section to disable them all."""
+
+    tool_definitions: ToolDefinitionsDebugConfig = Field(default_factory=ToolDefinitionsDebugConfig)
+
+
 class LoggingConfig(BasePydanticModel):
     """Agent file logging settings."""
 
@@ -272,6 +284,7 @@ class ApplicationConfig(BasePydanticModel):
     indexing: IndexingConfig = Field(default_factory=IndexingConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    debug: DebugConfig = Field(default_factory=DebugConfig)
 
     def get_model_connection_details(self, model: ModelConfig) -> ModelConnectionDetails:
         """Resolve a model's provider into its full connection details."""

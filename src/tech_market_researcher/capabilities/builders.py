@@ -30,13 +30,13 @@ def build_middleware_list(config: CapabilitiesConfig) -> list[AgentMiddleware[An
     return middlewares
 
 
-WEB_PAGE_INDEX_TOOL_NAME_PREFIX = "web_page"
-WEB_PAGE_INDEX_COLLECTION_DESCRIPTION = (
+WEBPAGE_INDEX_TOOL_NAME_PREFIX = "webpage"
+WEBPAGE_INDEX_COLLECTION_DESCRIPTION = (
     "A vector index of web pages the agent has fetched during its research. "
     "Each document is the text content of a fetched page. "
     "Use it to recall the content of pages you have already fetched instead of fetching them again."
 )
-WEB_PAGE_INDEX_METADATA_PARAMETERS = [
+WEBPAGE_INDEX_METADATA_PARAMETERS = [
     MetadataParameter(
         name="source_url",
         description=(
@@ -48,7 +48,7 @@ WEB_PAGE_INDEX_METADATA_PARAMETERS = [
         ),
     ),
 ]
-WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION = (
+WEBPAGE_INDEX_DOCUMENT_ID_DESCRIPTION = (
     "The URL of the web page this record stores. Always use the page's full URL, including the "
     "scheme (e.g. https://example.com/article), as the ID, so re-fetching the same page replaces "
     "its previous record instead of duplicating it."
@@ -60,7 +60,7 @@ def _page_domain(record: DocumentRecord) -> str | None:
     return domain_from_url(record.key)
 
 
-WEB_PAGE_INDEX_METADATA_MAPPERS = [
+WEBPAGE_INDEX_METADATA_MAPPERS = [
     DocumentMetadataMapper(
         name="domain",
         description="The domain of the web page this document was fetched from (e.g. example.com).",
@@ -90,13 +90,13 @@ async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
             await build_index_tools(
                 client,
                 IndexToolsParams(
-                    tool_name_prefix=WEB_PAGE_INDEX_TOOL_NAME_PREFIX,
+                    tool_name_prefix=WEBPAGE_INDEX_TOOL_NAME_PREFIX,
                     collection_name=indexer.collection_name,
-                    collection_description=WEB_PAGE_INDEX_COLLECTION_DESCRIPTION,
+                    collection_description=WEBPAGE_INDEX_COLLECTION_DESCRIPTION,
                     is_document_id_required=True,
-                    document_id_description=WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION,
-                    metadata_parameters=WEB_PAGE_INDEX_METADATA_PARAMETERS,
-                    metadata_mappers=WEB_PAGE_INDEX_METADATA_MAPPERS,
+                    document_id_description=WEBPAGE_INDEX_DOCUMENT_ID_DESCRIPTION,
+                    metadata_parameters=WEBPAGE_INDEX_METADATA_PARAMETERS,
+                    metadata_mappers=WEBPAGE_INDEX_METADATA_MAPPERS,
                     embeddings_model=config.get_model_connection_details(indexer.embeddings_model),
                     document_fetcher=fetch_as_markdown,
                     chunk_size_tokens=indexer.chunk_size_tokens,

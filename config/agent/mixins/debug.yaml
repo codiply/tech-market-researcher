@@ -1,0 +1,6 @@
+# Debug dumps written under .debug/.
+debug:
+  # Dumps every tool bound to the model (name, description, parameters) to
+  # .debug/agent/tool-definitions/tool-definitions.json on agent creation.
+  tool_definitions:
+    enabled: true

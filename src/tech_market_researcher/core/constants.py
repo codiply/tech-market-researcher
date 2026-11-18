@@ -14,6 +14,10 @@ DEBUG_CONFIG_LATEST_FOLDER = "latest"
 DEBUG_CONFIG_ARCHIVE_FOLDER = "archive"
 # Maximum number of timestamped config archives to keep per loader; older ones are pruned.
 DEBUG_CONFIG_ARCHIVE_MAX_COUNT = 1000
+# Folder under BASE_DEBUG_DIR_PATH for the agent's debug dumps, and the file the tool definitions are written to.
+DEBUG_AGENT_FOLDER = "agent"
+DEBUG_TOOL_DEFINITIONS_FOLDER = "tool-definitions"
+TOOL_DEFINITIONS_FILE_NAME = "tool-definitions.json"
 
 # On-disk directory the agent's filesystem tools are rooted at (virtual mode).
 AGENT_BACKEND_ROOT_DIR = Path(".storage/agent/backend")

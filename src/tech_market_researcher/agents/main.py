@@ -19,6 +19,7 @@ from tech_market_researcher.core.configuration import ApplicationConfig, load_co
 from tech_market_researcher.core.constants import AGENT_BACKEND_MAX_FILE_SIZE_MB, AGENT_BACKEND_ROOT_DIR
 from tech_market_researcher.core.logging_setup import setup_agent_logging
 from tech_market_researcher.core.observability import agent_trace_context, setup_observability
+from tech_market_researcher.core.tool_definitions_dump import dump_agent_tool_definitions
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,8 @@ async def create_agent(
             max_file_size_mb=AGENT_BACKEND_MAX_FILE_SIZE_MB,
         ),
     )
+    if config.debug.tool_definitions.enabled:
+        dump_agent_tool_definitions(agent)
     return TechMarketResearcherAgent(
         agent,
         config.environment,
