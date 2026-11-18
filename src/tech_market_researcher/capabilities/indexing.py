@@ -4,10 +4,11 @@ import inspect
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 import mlflow
 from chromadb.api.models.AsyncCollection import AsyncCollection
+from chromadb.types import Where
 from langchain.tools import ToolRuntime
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field, create_model, model_validator
@@ -30,6 +31,7 @@ INDEXING_TOOL_NAME_QUERY_SUFFIX = "index_query"
 QUERY_INDEX_MAX_RESULTS_DEFAULT = 5
 QUERY_INDEX_MAX_RESULTS_MAX = 25
 METADATA_PARAMETER_NAME_PREFIX = "metadata_"
+FILTER_PARAMETER_NAME_PREFIX = "filter_"
 
 # Reserved metadata keys written automatically by the upsert tool.
 SOURCE_ID_METADATA_KEY = "_source_id"
@@ -39,8 +41,31 @@ CHUNK_COUNT_METADATA_KEY = "_chunk_count"
 logger = logging.getLogger(__name__)
 
 
+class DocumentRecord(BaseModel):
+    """A document's key and content, the input to metadata mappers."""
+
+    key: str
+    content: str
+
+
 class MetadataParameter(BaseModel):
     """A metadata field of the collection, exposed as a dedicated upsert tool parameter."""
+
+    name: str
+    description: str
+
+
+class DocumentMetadataMapper(BaseModel):
+    """An extra record metadata field, computed server-side from the record's key and content."""
+
+    name: str
+    description: str
+    # Maps the record's key and content to the metadata value, or None to omit the field.
+    mapper: Callable[[DocumentRecord], str | None]
+
+
+class MetadataField(BaseModel):
+    """The name and description of a record metadata field the query tool can filter on."""
 
     name: str
     description: str
@@ -56,6 +81,9 @@ class IndexToolsParams(BaseModel):
     is_document_id_required: bool = False
     document_id_description: str = "Optional explicit record ID; a UUID is generated when omitted"
     metadata_parameters: list[MetadataParameter] | None = None
+    # Extra metadata fields whose value is computed from the document's key and content
+    # instead of provided by the model. Each is also exposed as a query filter argument.
+    metadata_mappers: list[DocumentMetadataMapper] | None = None
     embeddings_model: ModelConnectionDetails
     document_fetcher: Callable[[str], str | Awaitable[str]] | None = None
     chunk_size_tokens: int | None = None
@@ -76,6 +104,14 @@ class IndexToolsParams(BaseModel):
                 raise ValueError("chunk_size_tokens requires document_fetcher")
             if not 0 <= self.chunk_overlap_tokens < self.chunk_size_tokens:
                 raise ValueError("chunk_overlap_tokens must be less than chunk_size_tokens")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_metadata_field_names(self) -> "IndexToolsParams":
+        names = [p.name for p in self.metadata_parameters or []] + [m.name for m in self.metadata_mappers or []]
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        if duplicates:
+            raise ValueError(f"duplicate metadata field names: {duplicates}")
         return self
 
 
@@ -116,6 +152,13 @@ def _metadata_arg_lines(parameters: list[MetadataParameter]) -> list[str]:
     return [f"    {METADATA_PARAMETER_NAME_PREFIX}{p.name}: {p.description}" for p in parameters]
 
 
+def _metadata_field_specs(params: IndexToolsParams) -> list[MetadataField]:
+    """Every record metadata field the query tool can filter on."""
+    fields = [MetadataField(name=p.name, description=p.description) for p in params.metadata_parameters or []]
+    fields.extend(MetadataField(name=m.name, description=m.description) for m in params.metadata_mappers or [])
+    return fields
+
+
 def _metadata_from_args(
     metadata_fields: dict[str, str], parameters: list[MetadataParameter]
 ) -> dict[str, str | int | float | bool]:
@@ -126,6 +169,11 @@ def _metadata_from_args(
         if value is not None:
             metadata[parameter.name] = value
     return metadata
+
+
+def _mapped_metadata(mappers: list[DocumentMetadataMapper], record: DocumentRecord) -> dict[str, str]:
+    """Compute the mapper-derived metadata values, omitting fields whose mapper returns None."""
+    return {mapper.name: value for mapper in mappers if (value := mapper.mapper(record)) is not None}
 
 
 def _build_upsert_docstring(
@@ -167,14 +215,38 @@ def _build_upsert_docstring(
     )
 
 
+def _build_query_args_model(params: IndexToolsParams) -> type[BaseModel]:
+    """Build the query tool args schema, adding one optional str filter per record metadata field."""
+    prefix = params.tool_name_prefix if params.tool_name_prefix.endswith("_") else f"{params.tool_name_prefix}_"
+    schema_name = f"{prefix}IndexQueryArgs"
+    filter_fields: dict[str, Any] = {
+        f"{FILTER_PARAMETER_NAME_PREFIX}{field.name}": (str | None, Field(default=None, description=field.description))
+        for field in _metadata_field_specs(params)
+    }
+    return create_model(
+        schema_name,
+        query=(str, Field(description="Search query to execute")),
+        max_results=(
+            int,
+            Field(default=QUERY_INDEX_MAX_RESULTS_DEFAULT, description="Maximum number of results to return"),
+        ),
+        **filter_fields,
+    )
+
+
 def _build_query_docstring(params: IndexToolsParams, per_conversation: bool = False) -> str:
-    """Build the query tool docstring, including the collection description."""
+    """Build the query tool docstring, including the collection description and argument docs."""
     collection_sentence = (
         f"Retrieve the documents most relevant to a query from the {params.collection_name} collection "
         "for this conversation. Only the current conversation's documents are visible."
         if per_conversation
         else f"Retrieve the documents most relevant to a query from the {params.collection_name} collection."
     )
+    filter_lines = [
+        f"    {FILTER_PARAMETER_NAME_PREFIX}{field.name}: Only return documents whose metadata field "
+        f"{field.name!r} equals this value (exact match)"
+        for field in _metadata_field_specs(params)
+    ]
     return "\n".join(
         [
             collection_sentence,
@@ -185,6 +257,7 @@ def _build_query_docstring(params: IndexToolsParams, per_conversation: bool = Fa
             "Args:",
             "    query: Search query to execute",
             "    max_results: Maximum number of results to return (max 25, default: 5)",
+            *filter_lines,
             "",
             "Returns:",
             "    Numbered documents with ID and distance",
@@ -206,7 +279,10 @@ async def build_index_tools(
     (or created) up front. The collection description is injected into the
     docstrings of the generated tools. Each metadata parameter is exposed as
     a dedicated optional `metadata_<name>` argument of the upsert tool whose
-    value is stored under the parameter's name in the record's metadata."""
+    value is stored under the parameter's name in the record's metadata; each
+    metadata mapper is computed server-side from the record's key and content,
+    and every such field is exposed as an optional `filter_<name>` argument of
+    the query tool (exact match)."""
     parameters = params.metadata_parameters or []
     tool_name_prefix = params.tool_name_prefix
     if not tool_name_prefix.endswith("_"):
@@ -247,8 +323,11 @@ async def build_index_tools(
     async def upsert_index(
         collection: AsyncCollection, document: str, document_id: str | None = None, **metadata_fields: str
     ) -> str:
-        metadata = _metadata_from_args(metadata_fields, parameters)
         record_id = document_id or str(uuid.uuid4())
+        metadata = _metadata_from_args(metadata_fields, parameters)
+        metadata.update(
+            _mapped_metadata(params.metadata_mappers or [], DocumentRecord(key=record_id, content=document))
+        )
         logger.info("Upserting 1 document into collection '%s' (id=%s)", collection.name, record_id)
         await upsert_documents(collection, [ChromaDocument(id=record_id, document=document, metadata=metadata)])
         return f"Stored document with id {record_id}"
@@ -260,6 +339,9 @@ async def build_index_tools(
         if inspect.isawaitable(content):
             content = await content
         metadata = _metadata_from_args(metadata_fields, parameters)
+        metadata.update(
+            _mapped_metadata(params.metadata_mappers or [], DocumentRecord(key=document_id, content=content))
+        )
         if params.chunk_size_tokens is not None:
             assert token_encoder is not None
             chunks = split_text_into_chunks(
@@ -297,12 +379,18 @@ async def build_index_tools(
         collection: AsyncCollection,
         query: str,
         max_results: int = QUERY_INDEX_MAX_RESULTS_DEFAULT,
+        where: Where | None = None,
     ) -> str:
         effective_max_results = min(max_results, QUERY_INDEX_MAX_RESULTS_MAX)
-        logger.info("Querying collection '%s' (max_results=%d)", collection.name, effective_max_results)
+        logger.info(
+            "Querying collection '%s' (max_results=%d, where=%s)",
+            collection.name,
+            effective_max_results,
+            where or None,
+        )
         with mlflow.start_span(name=query_span_name, span_type="RETRIEVER") as span:
-            span.set_inputs({"query": query, "max_results": effective_max_results})
-            result = await chroma_query(collection, query, n_results=effective_max_results)
+            span.set_inputs({"query": query, "max_results": effective_max_results, "where": where or None})
+            result = await chroma_query(collection, query, n_results=effective_max_results, where=where)
             items = [item for item in result.items[0] if item.document is not None]
             span.set_outputs(
                 [
@@ -336,8 +424,15 @@ async def build_index_tools(
         runtime: ToolRuntime[AgentRuntimeContext],
         query: str,
         max_results: int = QUERY_INDEX_MAX_RESULTS_DEFAULT,
+        **filter_fields: str,
     ) -> str:
-        return await query_index(await _get_conversation_collection(runtime), query, max_results)
+        filters = {
+            name[len(FILTER_PARAMETER_NAME_PREFIX) :]: value
+            for name, value in filter_fields.items()
+            if value is not None
+        }
+        where: Where | None = cast("Where | None", filters) if filters else None
+        return await query_index(await _get_conversation_collection(runtime), query, max_results, where)
 
     upsert_tool = StructuredTool.from_function(
         coroutine=upsert_tool_fn,
@@ -351,5 +446,6 @@ async def build_index_tools(
         coroutine=query_tool_fn,
         name=f"{tool_name_prefix}{INDEXING_TOOL_NAME_QUERY_SUFFIX}",
         description=_build_query_docstring(params, per_conversation=params.do_suffix_collection_name_with_thread_id),
+        args_schema=_build_query_args_model(params),
     )
     return [upsert_tool, query_tool]

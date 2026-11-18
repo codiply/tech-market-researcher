@@ -1,11 +1,17 @@
 """Webpage fetching helpers."""
 
 import logging
+from urllib.parse import urlsplit
 
 import httpx
 from markdownify import markdownify
 
 logger = logging.getLogger(__name__)
+
+
+def domain_from_url(url: str) -> str | None:
+    """Extract the domain (hostname) from a URL, or None if the URL has no host."""
+    return urlsplit(url).hostname
 
 
 def fetch_as_markdown(url: str, timeout: float = 10.0) -> str:

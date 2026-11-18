@@ -7,12 +7,18 @@ from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.tools import BaseTool
 
 from tech_market_researcher.capabilities.clock import current_datetime
-from tech_market_researcher.capabilities.indexing import IndexToolsParams, MetadataParameter, build_index_tools
+from tech_market_researcher.capabilities.indexing import (
+    DocumentMetadataMapper,
+    DocumentRecord,
+    IndexToolsParams,
+    MetadataParameter,
+    build_index_tools,
+)
 from tech_market_researcher.capabilities.runtime_context import runtime_context_debugger
 from tech_market_researcher.capabilities.search import get_search_tool
 from tech_market_researcher.capabilities.webpage import fetch_page
 from tech_market_researcher.core.configuration import ApplicationConfig, CapabilitiesConfig
-from tech_market_researcher.core.webpage import fetch_as_markdown
+from tech_market_researcher.core.webpage import domain_from_url, fetch_as_markdown
 from tech_market_researcher.integrations.chroma import get_client
 
 
@@ -49,6 +55,20 @@ WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION = (
 )
 
 
+def _page_domain(record: DocumentRecord) -> str | None:
+    """Extract the page's domain from the URL stored as the record's key."""
+    return domain_from_url(record.key)
+
+
+WEB_PAGE_INDEX_METADATA_MAPPERS = [
+    DocumentMetadataMapper(
+        name="domain",
+        description="The domain of the web page this document was fetched from (e.g. example.com).",
+        mapper=_page_domain,
+    ),
+]
+
+
 async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
     """Build the tools list from the capabilities config."""
     capabilities = config.supervisor.capabilities
@@ -76,6 +96,7 @@ async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
                     is_document_id_required=True,
                     document_id_description=WEB_PAGE_INDEX_DOCUMENT_ID_DESCRIPTION,
                     metadata_parameters=WEB_PAGE_INDEX_METADATA_PARAMETERS,
+                    metadata_mappers=WEB_PAGE_INDEX_METADATA_MAPPERS,
                     embeddings_model=config.get_model_connection_details(indexer.embeddings_model),
                     document_fetcher=fetch_as_markdown,
                     chunk_size_tokens=indexer.chunk_size_tokens,
