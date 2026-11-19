@@ -1,5 +1,6 @@
 """Builders that turn the capabilities config into agent tools and middlewares."""
 
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain.agents.middleware import TodoListMiddleware
@@ -10,6 +11,7 @@ from tech_market_researcher.capabilities.clock import current_datetime
 from tech_market_researcher.capabilities.indexing import (
     DocumentMetadataMapper,
     DocumentRecord,
+    FetchedDocument,
     IndexToolsParams,
     MetadataParameter,
     build_index_tools,
@@ -61,6 +63,15 @@ def _page_domain(record: DocumentRecord) -> str | None:
     return domain_from_url(record.key)
 
 
+async def _fetch_webpage_with_metadata(url: str) -> FetchedDocument:
+    """Fetch a page and record the time it was fetched as record metadata."""
+    content = fetch_as_markdown(url)
+    return FetchedDocument(
+        content=content,
+        metadata={"fetched_at": datetime.now(timezone.utc).isoformat()},
+    )
+
+
 WEBPAGE_INDEX_METADATA_MAPPERS = [
     DocumentMetadataMapper(
         name="domain",
@@ -99,7 +110,7 @@ async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
                     metadata_parameters=WEBPAGE_INDEX_METADATA_PARAMETERS,
                     metadata_mappers=WEBPAGE_INDEX_METADATA_MAPPERS,
                     embeddings_model=config.get_model_connection_details(indexer.embeddings_model),
-                    document_fetcher=fetch_as_markdown,
+                    document_fetcher=_fetch_webpage_with_metadata,
                     chunk_size_tokens=indexer.chunk_size_tokens,
                     chunk_overlap_tokens=indexer.chunk_overlap_tokens,
                     do_suffix_collection_name_with_thread_id=config.indexing.do_suffix_collection_name_with_thread_id,

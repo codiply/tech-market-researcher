@@ -1,9 +1,8 @@
 """Agent tools for a document index: upserting documents and querying them."""
 
-import inspect
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, cast
 
 import mlflow
@@ -55,6 +54,13 @@ class MetadataParameter(BaseModel):
     description: str
 
 
+class FetchedDocument(BaseModel):
+    """A document fetched server-side from its ID, with optional record metadata."""
+
+    content: str
+    metadata: dict[str, str | int | float | bool] = Field(default_factory=dict)
+
+
 class DocumentMetadataMapper(BaseModel):
     """An extra record metadata field, computed server-side from the record's key and content."""
 
@@ -85,7 +91,7 @@ class IndexToolsParams(BaseModel):
     # instead of provided by the model. Each is also exposed as a query filter argument.
     metadata_mappers: list[DocumentMetadataMapper] | None = None
     embeddings_model: ModelConnectionDetails
-    document_fetcher: Callable[[str], str | Awaitable[str]] | None = None
+    document_fetcher: Callable[[str], Awaitable[FetchedDocument]] | None = None
     chunk_size_tokens: int | None = None
     chunk_overlap_tokens: int = 50
     # Suffix the collection name with the conversation's thread id, so each conversation
@@ -178,6 +184,18 @@ def _mapped_metadata(mappers: list[DocumentMetadataMapper], record: DocumentReco
     return {mapper.name: value for mapper in mappers if (value := mapper.mapper(record)) is not None}
 
 
+def _build_record_metadata(
+    tool_args_metadata: Mapping[str, str | int | float | bool],
+    fetched_metadata: Mapping[str, str | int | float | bool],
+    mapper_metadata: Mapping[str, str | int | float | bool],
+) -> dict[str, str | int | float | bool]:
+    """Merge the record metadata layers into one dict; later arguments take precedence over earlier ones."""
+    metadata = dict(tool_args_metadata)
+    metadata.update(fetched_metadata)
+    metadata.update(mapper_metadata)
+    return metadata
+
+
 def _build_upsert_docstring(
     params: IndexToolsParams, parameters: list[MetadataParameter], per_conversation: bool = False
 ) -> str:
@@ -267,31 +285,19 @@ def _build_query_docstring(params: IndexToolsParams, per_conversation: bool = Fa
     )
 
 
-async def build_index_tools(
+async def _build_collection_resolver(
     chroma_client,
     params: IndexToolsParams,
-) -> list[BaseTool]:
-    """Return the index upsert and query tools for the named Chroma collection.
+) -> Callable[[ToolRuntime[AgentRuntimeContext]], Awaitable[AsyncCollection]]:
+    """Build the per-call collection resolver for the index tools.
 
-    The tool names are the prefix (a trailing underscore is added if missing)
-    followed by the upsert/query suffixes. The collection is resolved on every call
-    through a conversation-collection helper: when the collection name is suffixed with
-    the thread id, each call resolves the conversation's own collection from the tool
-    runtime's context; otherwise the same helper returns the single collection fetched
-    (or created) up front. The collection description is injected into the
-    docstrings of the generated tools. Each metadata parameter is exposed as
-    a dedicated optional `metadata_<name>` argument of the upsert tool whose
-    value is stored under the parameter's name in the record's metadata; each
-    metadata mapper is computed server-side from the record's key and content,
-    and every such field is exposed as an optional `filter_<name>` argument of
-    the query tool (exact match)."""
-    parameters = params.metadata_parameters or []
-    tool_name_prefix = params.tool_name_prefix
-    if not tool_name_prefix.endswith("_"):
-        tool_name_prefix += "_"
+    When the collection name is suffixed with the thread id, each call resolves the
+    conversation's own collection from the tool runtime's context; otherwise all
+    conversations share a single collection fetched (or created) once up front,
+    and the runtime is ignored."""
     if params.do_suffix_collection_name_with_thread_id:
 
-        async def _get_conversation_collection(
+        async def get_conversation_collection(
             runtime: ToolRuntime[AgentRuntimeContext],
         ) -> AsyncCollection:
             collection_name = collection_name_for_thread(params.collection_name, runtime.context.thread_id)
@@ -314,11 +320,37 @@ async def build_index_tools(
             additional_metadata=params.additional_collection_metadata,
         )
 
-        async def _get_conversation_collection(
+        async def get_conversation_collection(
             runtime: ToolRuntime[AgentRuntimeContext],  # pylint: disable=unused-argument
         ) -> AsyncCollection:
             return shared_collection
 
+    return get_conversation_collection
+
+
+async def build_index_tools(
+    chroma_client,
+    params: IndexToolsParams,
+) -> list[BaseTool]:
+    """Return the index upsert and query tools for the named Chroma collection.
+
+    The tool names are the prefix (a trailing underscore is added if missing)
+    followed by the upsert/query suffixes. The collection is resolved on every call
+    through a conversation-collection helper: when the collection name is suffixed with
+    the thread id, each call resolves the conversation's own collection from the tool
+    runtime's context; otherwise the same helper returns the single collection fetched
+    (or created) up front. The collection description is injected into the
+    docstrings of the generated tools. Each metadata parameter is exposed as
+    a dedicated optional `metadata_<name>` argument of the upsert tool whose
+    value is stored under the parameter's name in the record's metadata; each
+    metadata mapper is computed server-side from the record's key and content,
+    and every such field is exposed as an optional `filter_<name>` argument of
+    the query tool (exact match)."""
+    parameters = params.metadata_parameters or []
+    tool_name_prefix = params.tool_name_prefix
+    if not tool_name_prefix.endswith("_"):
+        tool_name_prefix += "_"
+    get_conversation_collection = await _build_collection_resolver(chroma_client, params)
     token_encoder = get_token_encoder() if params.chunk_size_tokens is not None else None
     query_span_name = f"{tool_name_prefix}{INDEXING_TOOL_NAME_QUERY_SUFFIX}"
 
@@ -326,10 +358,11 @@ async def build_index_tools(
         collection: AsyncCollection, document: str, document_id: str | None = None, **metadata_fields: str
     ) -> str:
         record_id = document_id or str(uuid.uuid4())
-        metadata = _metadata_from_args(metadata_fields, parameters)
-        metadata.update(
-            _mapped_metadata(params.metadata_mappers or [], DocumentRecord(key=record_id, content=document))
+        tool_args_metadata = _metadata_from_args(metadata_fields, parameters)
+        mapper_metadata = _mapped_metadata(
+            params.metadata_mappers or [], DocumentRecord(key=record_id, content=document)
         )
+        metadata = _build_record_metadata(tool_args_metadata, {}, mapper_metadata)
         logger.info("Upserting 1 document into collection '%s' (id=%s)", collection.name, record_id)
         await upsert_documents(collection, [ChromaDocument(id=record_id, document=document, metadata=metadata)])
         return f"Stored document with id {record_id}"
@@ -337,13 +370,14 @@ async def build_index_tools(
     async def upsert_index_fetched(collection: AsyncCollection, document_id: str, **metadata_fields: str) -> str:
         assert params.document_fetcher is not None
         logger.info("Fetching and indexing document %s into collection '%s'", document_id, collection.name)
-        content = params.document_fetcher(document_id)
-        if inspect.isawaitable(content):
-            content = await content
-        metadata = _metadata_from_args(metadata_fields, parameters)
-        metadata.update(
-            _mapped_metadata(params.metadata_mappers or [], DocumentRecord(key=document_id, content=content))
+        fetched = await params.document_fetcher(document_id)
+        content = fetched.content
+        tool_args_metadata = _metadata_from_args(metadata_fields, parameters)
+        mapper_metadata = _mapped_metadata(
+            params.metadata_mappers or [], DocumentRecord(key=document_id, content=content)
         )
+        # Mapper-derived metadata takes precedence over fetched and tool-argument values.
+        metadata = _build_record_metadata(tool_args_metadata, fetched.metadata, mapper_metadata)
         if params.chunk_size_tokens is not None:
             assert token_encoder is not None
             chunks = split_text_into_chunks(
@@ -415,7 +449,7 @@ async def build_index_tools(
         document_id: str | None = None,
         **metadata_fields: str,
     ) -> str:
-        collection = await _get_conversation_collection(runtime)
+        collection = await get_conversation_collection(runtime)
         if params.document_fetcher is not None:
             assert document_id is not None, "document_id is required when the document is fetched from a URL"
             return await upsert_index_fetched(collection, document_id, **metadata_fields)
@@ -434,7 +468,7 @@ async def build_index_tools(
             if value is not None
         }
         where: Where | None = cast("Where | None", filters) if filters else None
-        return await query_index(await _get_conversation_collection(runtime), query, max_results, where)
+        return await query_index(await get_conversation_collection(runtime), query, max_results, where)
 
     upsert_tool = StructuredTool.from_function(
         coroutine=upsert_tool_fn,
