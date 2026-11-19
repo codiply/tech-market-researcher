@@ -12,6 +12,7 @@ from pydantic import Field, SecretStr, model_validator
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
 from tech_market_researcher.core.constants import (
+    AGENT_BACKEND_ROOT_DIR,
     AGENT_DEFAULT_LOG_LEVEL,
     AGENT_DEFAULT_LOG_ROTATION_BACKUP_COUNT,
     AGENT_DEFAULT_LOG_ROTATION_MAX_SIZE_MB,
@@ -255,6 +256,12 @@ class DebugConfig(BasePydanticModel):
     tool_definitions: ToolDefinitionsDebugConfig = Field(default_factory=ToolDefinitionsDebugConfig)
 
 
+class FilesystemBackendConfig(BasePydanticModel):
+    """On-disk root for the agent's filesystem tools (virtual mode)."""
+
+    root_dir: Path = AGENT_BACKEND_ROOT_DIR
+
+
 class LoggingConfig(BasePydanticModel):
     """Agent file logging settings."""
 
@@ -322,6 +329,7 @@ class ApplicationConfig(BasePydanticModel):
     indexing: IndexingConfig = Field(default_factory=IndexingConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    filesystem_backend: FilesystemBackendConfig = Field(default_factory=FilesystemBackendConfig)
     debug: DebugConfig = Field(default_factory=DebugConfig)
 
     def get_model_connection_details(self, model: ModelConfig) -> ModelConnectionDetails:
