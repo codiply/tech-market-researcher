@@ -32,9 +32,9 @@ supervisor:
       # provider: tavily
     todo_list:
       enabled: true
-    web_page_indexer:
+    webpage_indexer:
       enabled: true
-      collection_name: web-page-index
+      collection_name: webpage-index
       embeddings_model:
         provider: omlx
         name: Qwen3-Embedding-0.6B-4bit-DWQ
@@ -42,6 +42,8 @@ supervisor:
       chunk_overlap_tokens: 50
 indexing:
   chroma_url_env_var: CHROMA_URL
+  # For quick iteration when developing, we migrate the embeddings every time we switch models
+  embedding_model_mismatch_behavior: migrate
 logging:
   directory: .storage/agent/logs
   level: DEBUG

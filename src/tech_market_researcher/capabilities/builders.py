@@ -19,7 +19,8 @@ from tech_market_researcher.capabilities.search import get_search_tool
 from tech_market_researcher.capabilities.webpage import fetch_page
 from tech_market_researcher.core.configuration import ApplicationConfig, CapabilitiesConfig
 from tech_market_researcher.core.webpage import domain_from_url, fetch_as_markdown
-from tech_market_researcher.integrations.chroma import get_client
+from tech_market_researcher.integrations.chroma.collection import EmbeddingModelMismatchBehavior
+from tech_market_researcher.integrations.chroma.common import get_client
 
 
 def build_middleware_list(config: CapabilitiesConfig) -> list[AgentMiddleware[Any, Any, Any]]:
@@ -81,10 +82,10 @@ async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
         tools.append(runtime_context_debugger)
     if capabilities.current_datetime.enabled:
         tools.append(current_datetime)
-    if capabilities.web_page_indexer.enabled:
-        indexer = capabilities.web_page_indexer
-        assert indexer.collection_name is not None  # Validated by WebPageIndexerConfig
-        assert indexer.embeddings_model is not None  # Validated by WebPageIndexerConfig
+    if capabilities.webpage_indexer.enabled:
+        indexer = capabilities.webpage_indexer
+        assert indexer.collection_name is not None  # Validated by WebpageIndexerConfig
+        assert indexer.embeddings_model is not None  # Validated by WebpageIndexerConfig
         client = await get_client(config.indexing.chroma_url_env_var)
         tools.extend(
             await build_index_tools(
@@ -103,6 +104,7 @@ async def build_tool_list(config: ApplicationConfig) -> list[BaseTool]:
                     chunk_overlap_tokens=indexer.chunk_overlap_tokens,
                     do_suffix_collection_name_with_thread_id=config.indexing.do_suffix_collection_name_with_thread_id,
                     additional_collection_metadata=config.indexing.additional_collection_metadata,
+                    mismatch_behavior=EmbeddingModelMismatchBehavior(config.indexing.embedding_model_mismatch_behavior),
                 ),
             )
         )

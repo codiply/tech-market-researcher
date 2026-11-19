@@ -17,8 +17,8 @@ dist/
 mlflow.db
 mlruns/
 
-# Chroma local fallback DB (created if a client runs without a persistence path)
-chroma/
+# Chroma local fallback DB (created at the repo root if a client runs without a persistence path)
+/chroma/
 
 # Debugging artifacts
 .debug/

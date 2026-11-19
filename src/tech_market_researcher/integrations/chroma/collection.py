@@ -1,31 +1,29 @@
-"""Helpers for managing collections in our Chroma server."""
+"""Creating, resolving and writing Chroma collections for the agent."""
 
 import logging
-import os
 import re
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
-from enum import StrEnum
 from typing import cast
-from urllib.parse import urlsplit
 
-import chromadb
 import numpy
 from chromadb import AsyncClientAPI
 from chromadb.api.models.AsyncCollection import AsyncCollection
 from chromadb.api.types import EmbeddingFunction, QueryResult
-from chromadb.base_types import Metadata
 from chromadb.errors import NotFoundError
 from chromadb.types import Where, WhereDocument
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field
 
 from tech_market_researcher.core.configuration import ModelConnectionDetails
-
-EMBEDDINGS_MODEL_NAME_METADATA_KEY = "_embeddings_model_name"
-
-EMBEDDINGS_COMPUTED_AT_METADATA_KEY = "_embeddings_computed_at"
+from tech_market_researcher.integrations.chroma._core import upsert_records
+from tech_market_researcher.integrations.chroma.common import (
+    EMBEDDINGS_MODEL_NAME_METADATA_KEY,
+    ChromaDocument,
+    ChromaQueryResult,
+    EmbeddingModelMismatchBehavior,
+    QueryResultItem,
+    build_embedding_function,
+)
+from tech_market_researcher.integrations.chroma.migration import assert_not_migrating, migrate_if_needed
 
 DEFAULT_QUERY_N_RESULTS = 10
 
@@ -45,68 +43,10 @@ def collection_name_for_thread(base_name: str, thread_id: str) -> str:
     return f"{base_name}-.-{_COLLECTION_NAME_INVALID_CHARS.sub('-', thread_id)}"
 
 
-class EmbeddingModelMismatchBehavior(StrEnum):
-    """What to do when an existing collection was created with a different embeddings model."""
-
-    RAISE = "raise"
-    MIGRATE = "migrate"
-
-
-class ChromaDocument(BaseModel):
-    """A record to store in a Chroma collection."""
-
-    id: str
-    document: str
-    metadata: dict[str, str | int | float | bool] = Field(default_factory=dict)
-
-
-class QueryResultItem(BaseModel):
-    """A single match returned by a collection query."""
-
-    id: str
-    document: str | None
-    metadata: dict[str, str | int | float | bool] | None
-    distance: float | None
-
-
-class ChromaQueryResult(BaseModel):
-    """Zipped query results: one list of items per input query, in input order."""
-
-    items: list[list[QueryResultItem]]
-
-
-def _split_chroma_url(chroma_url_env_var: str) -> tuple[str, int]:
-    """Split the Chroma URL env var into (host, port), defaulting to localhost:8386."""
-    url = os.environ.get(chroma_url_env_var, "http://localhost:8386")
-    return urlsplit(url).hostname or "localhost", int(urlsplit(url).port or 8386)
-
-
-async def get_client(chroma_url_env_var: str = "CHROMA_URL") -> AsyncClientAPI:
-    """Create a client connected to the Chroma server at the given env var's URL."""
-    host, port = _split_chroma_url(chroma_url_env_var)
-    logger.debug("Connecting to Chroma server at %s:%s", host, port)
-    return await chromadb.AsyncHttpClient(host=host, port=port)
-
-
-def _build_embedding_function(
-    embeddings_model: ModelConnectionDetails,
-) -> EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]]:
-    """Build an OpenAIEmbeddingFunction backed by the resolved embedding model."""
-    # Chroma expects an embedding function over the wider CollectionInput type; we only ever pass documents.
-    return cast(
-        EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]],
-        OpenAIEmbeddingFunction(
-            api_key=embeddings_model.api_key.get_secret_value(),
-            api_base=embeddings_model.base_url.rstrip("/"),
-            model_name=embeddings_model.model_name,
-        ),
-    )
-
-
 async def _get_collection(
     client: AsyncClientAPI,
     name: str,
-    embedding_function: EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]],
+    embedding_function: EmbeddingFunction[list[str] | list[NDArray[numpy.uint64 | numpy.int64 | numpy.float64]]] | None,
 ) -> AsyncCollection | None:
     """Return the collection with the given name, or None if it does not exist."""
     try:
@@ -127,21 +67,18 @@ async def get_or_create_collection(
     New collections are created with an OpenAIEmbeddingFunction for the given embedding
     model, so documents get embedded on add. The model name is recorded in the
     collection metadata, together with any additional_metadata.
+
+    With MIGRATE behavior, an existing collection with a different embeddings model is
+    re-embedded with the new model and swapped in under the same name; the same is done
+    when the collection's status reports a repair pending, so a crashed migration is
+    resumable.
     """
-    embedding_function = _build_embedding_function(embeddings_model)
+    embedding_function = build_embedding_function(embeddings_model)
     collection = await _get_collection(client, name, embedding_function)
     if collection is not None:
-        existing_model = collection.metadata.get(EMBEDDINGS_MODEL_NAME_METADATA_KEY)
-        if existing_model != embeddings_model.model_name:
-            if mismatch_behavior == EmbeddingModelMismatchBehavior.RAISE:
-                raise ValueError(
-                    f"collection '{name}' was created with embeddings model {existing_model!r}, "
-                    f"but {embeddings_model.model_name!r} was requested"
-                )
-            if mismatch_behavior == EmbeddingModelMismatchBehavior.MIGRATE:
-                raise NotImplementedError
-            raise ValueError(f"unknown mismatch behavior: {mismatch_behavior!r}")
-        return collection
+        return await migrate_if_needed(
+            client, collection, name, embeddings_model, mismatch_behavior, additional_metadata
+        )
     # Chroma expects an embedding function over the wider CollectionInput type; we only ever pass documents.
     return await client.create_collection(
         name=name,
@@ -166,31 +103,26 @@ async def delete_collections_with_metadata(client: AsyncClientAPI, metadata: Map
 
 
 async def delete_where(collection: AsyncCollection, where: Where) -> None:
-    """Delete all records matching the given where clause."""
+    """Delete all records matching the given where clause.
+
+    Refuses to delete while an embedding migration of the collection is in progress, like
+    upsert_documents, so a delete is not applied to a collection that is about to be swapped out.
+    """
+    await assert_not_migrating(collection)
     await collection.delete(where=where)
 
 
 async def upsert_documents(collection: AsyncCollection, documents: Sequence[ChromaDocument]) -> None:
     """Insert records into a collection, embedding them with the collection's embedding function.
 
-    Records whose ID already exist are replaced; new IDs are inserted.
+    Records whose ID already exist are replaced; new IDs are inserted. Refuses to write while an
+    embedding migration of the collection is in progress (checked against the live metadata,
+    right before the write). The check is best-effort: without a server-side lock it is not
+    atomic with the write, so an in-flight write can still land in the collection moments after
+    the check.
     """
-    # Record which model produced the embeddings and when, so staleness can be detected.
-    model_name = collection.metadata.get(EMBEDDINGS_MODEL_NAME_METADATA_KEY)
-    computed_at = datetime.now(timezone.utc).isoformat()
-    metadatas: list[Metadata] = [
-        {
-            **document.metadata,
-            EMBEDDINGS_MODEL_NAME_METADATA_KEY: model_name,
-            EMBEDDINGS_COMPUTED_AT_METADATA_KEY: computed_at,
-        }
-        for document in documents
-    ]
-    await collection.upsert(
-        ids=[document.id for document in documents],
-        documents=[document.document for document in documents],
-        metadatas=metadatas,
-    )
+    await assert_not_migrating(collection)
+    await upsert_records(collection, documents)
 
 
 def _zip_query_result(result: QueryResult) -> ChromaQueryResult:

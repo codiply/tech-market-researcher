@@ -5,6 +5,7 @@ import os
 import re
 from enum import Enum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
 
@@ -113,7 +114,7 @@ class CurrentDateTimeConfig(BasePydanticModel):
     enabled: bool = False
 
 
-class WebPageIndexerConfig(BasePydanticModel):
+class WebpageIndexerConfig(BasePydanticModel):
     """Web-page indexer tool settings. Omit the section (or set enabled: false) to disable.
 
     Fetched pages are chunked into token-bounded chunks before being embedded, so each chunk stays
@@ -127,12 +128,12 @@ class WebPageIndexerConfig(BasePydanticModel):
     chunk_overlap_tokens: int = 50
 
     @model_validator(mode="after")
-    def _validate_enabled_fields(self) -> "WebPageIndexerConfig":
+    def _validate_enabled_fields(self) -> "WebpageIndexerConfig":
         if self.enabled and (self.collection_name is None or self.embeddings_model is None):
-            msg = "web_page_indexer requires collection_name and embeddings_model when enabled"
+            msg = "webpage_indexer requires collection_name and embeddings_model when enabled"
             raise ValueError(msg)
         if not 0 <= self.chunk_overlap_tokens < self.chunk_size_tokens:
-            msg = "web_page_indexer chunk_overlap_tokens must be less than chunk_size_tokens"
+            msg = "webpage_indexer chunk_overlap_tokens must be less than chunk_size_tokens"
             raise ValueError(msg)
         return self
 
@@ -182,7 +183,7 @@ class CapabilitiesConfig(BasePydanticModel):
     fetch_page: FetchPageConfig = Field(default_factory=FetchPageConfig)
     search: SearchToolConfig = Field(default_factory=SearchToolConfig)
     todo_list: TodoListConfig = Field(default_factory=TodoListConfig)
-    web_page_indexer: WebPageIndexerConfig = Field(default_factory=WebPageIndexerConfig)
+    webpage_indexer: WebpageIndexerConfig = Field(default_factory=WebpageIndexerConfig)
 
 
 class SupervisorConfig(BasePydanticModel):
@@ -231,6 +232,10 @@ class IndexingConfig(BasePydanticModel):
     """Vector index (Chroma) connection settings."""
 
     chroma_url_env_var: str = "CHROMA_URL"
+    # What to do when an existing collection was created with a different embeddings model:
+    # fail, or re-embed the collection's records with the new model (mirrors
+    # EmbeddingModelMismatchBehavior; Literal here to avoid a circular import).
+    embedding_model_mismatch_behavior: Literal["raise", "migrate"] = "raise"
     # Suffix every collection name with the conversation's thread id, so each
     # conversation reads from and writes to its own collections.
     do_suffix_collection_name_with_thread_id: bool = False

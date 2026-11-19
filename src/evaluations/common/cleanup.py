@@ -5,7 +5,8 @@ import logging
 
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.configuration import load_config
-from tech_market_researcher.integrations.chroma import delete_collections_with_metadata, get_client
+from tech_market_researcher.integrations.chroma.collection import delete_collections_with_metadata
+from tech_market_researcher.integrations.chroma.common import get_client
 
 logger = logging.getLogger(__name__)
 

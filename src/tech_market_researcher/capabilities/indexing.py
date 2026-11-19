@@ -16,15 +16,15 @@ from pydantic import BaseModel, Field, create_model, model_validator
 from tech_market_researcher.capabilities.chunking import get_token_encoder, split_text_into_chunks
 from tech_market_researcher.core.common import AgentRuntimeContext
 from tech_market_researcher.core.configuration import ModelConnectionDetails
-from tech_market_researcher.integrations.chroma import (
+from tech_market_researcher.integrations.chroma.collection import (
     ChromaDocument,
     EmbeddingModelMismatchBehavior,
     collection_name_for_thread,
     delete_where,
     get_or_create_collection,
 )
-from tech_market_researcher.integrations.chroma import query as chroma_query
-from tech_market_researcher.integrations.chroma import upsert_documents
+from tech_market_researcher.integrations.chroma.collection import query as chroma_query
+from tech_market_researcher.integrations.chroma.collection import upsert_documents
 
 INDEXING_TOOL_NAME_UPSERT_SUFFIX = "index_upsert"
 INDEXING_TOOL_NAME_QUERY_SUFFIX = "index_query"
@@ -94,6 +94,8 @@ class IndexToolsParams(BaseModel):
     do_suffix_collection_name_with_thread_id: bool = False
     # Extra metadata recorded on every collection created for the tools.
     additional_collection_metadata: dict[str, str] = Field(default_factory=dict)
+    # What to do when an existing collection was created with a different embeddings model.
+    mismatch_behavior: EmbeddingModelMismatchBehavior = Field(default=EmbeddingModelMismatchBehavior.RAISE)
 
     @model_validator(mode="after")
     def _validate_document_fetcher_fields(self) -> "IndexToolsParams":
@@ -297,7 +299,7 @@ async def build_index_tools(
                 chroma_client,
                 collection_name,
                 params.embeddings_model,
-                EmbeddingModelMismatchBehavior.RAISE,
+                params.mismatch_behavior,
                 additional_metadata=params.additional_collection_metadata,
             )
 
@@ -308,7 +310,7 @@ async def build_index_tools(
             chroma_client,
             params.collection_name,
             params.embeddings_model,
-            EmbeddingModelMismatchBehavior.RAISE,
+            params.mismatch_behavior,
             additional_metadata=params.additional_collection_metadata,
         )
 
