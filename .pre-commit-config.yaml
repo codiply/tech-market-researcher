@@ -43,6 +43,15 @@ repos:
         types: [python]
         require_serial: true
 
+      - id: cfn-lint
+        name: cfn-lint
+        description: "Lint CloudFormation templates"
+        entry: .venv/bin/cfn-lint
+        language: system
+        types: [yaml]
+        files: ^assets/infrastructure/cloudformation/
+        require_serial: true
+
       - id: unit_tests
         name: run unit tests
         description: "Run unit tests"
@@ -72,6 +81,9 @@ repos:
         description: "Strip trailing whitespace"
       - id: check-yaml
         description: "Check YAML syntax"
+        # CloudFormation templates use short-form intrinsic tags (!Equals,
+        # !If, !Sub, ...), which plain yaml.safe_load cannot parse.
+        exclude: ^assets/infrastructure/cloudformation/
       - id: check-json
         description: "Check JSON syntax"
       - id: check-toml

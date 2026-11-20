@@ -1,0 +1,404 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Inference Server for LLMs
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: '1. Naming'
+        Parameters:
+          - Version
+      - Label:
+          default: '2. Launch Configuration'
+        Parameters:
+          - InstanceType
+          - LatestAmiId
+          - VolumeSizeGb
+          - VolumeThroughputMbs
+          - IsSpotInstance
+      - Label:
+          default: '3. Network Access'
+        Parameters:
+          - AccessPrefixListId
+          - VpcId
+          - KeyPairName
+      - Label:
+          default: '4. Tailscale'
+        Parameters:
+          - TailscaleTag
+          - TailscaleAuthKeyParameterName
+
+Parameters:
+  Version:
+    Type: String
+    Default: v1
+    Description: Version suffix appended to the launch template name.
+
+  InstanceType:
+    Type: String
+    Default: g6e.xlarge
+    AllowedValues:
+      - g6e.xlarge
+      - g6e.2xlarge
+      - g6.xlarge
+      - g6.2xlarge
+      - g4dn.xlarge
+      - g4dn.2xlarge
+    Description: >
+      EC2 instance type for the inference server. g6e instances have the
+      L40S GPU with 48 GB; g6 instances have the L4 GPU with 24 GB; g4dn
+      instances have a T4 GPU with 16 GB. All use AMD EPYC (amd64) CPUs and
+      share the same Ubuntu AMI.
+
+  VolumeSizeGb:
+    Type: Number
+    Default: 100
+    MinValue: 30
+    MaxValue: 16384
+    Description: Size (GB) of the encrypted root EBS volume.
+
+  VolumeThroughputMbs:
+    Type: Number
+    Default: 750
+    MinValue: 125
+    MaxValue: 1000
+    Description: Throughput (MB/s) of the gp3 root EBS volume.
+
+  # Latest Ubuntu 26.04 server (amd64) AMI, resolved per region via Canonical's
+  # SSM parameter store (see ubuntu.com/aws/docs, "Build CloudFormation
+  # templates"). Must stay amd64: g6e/g6 use AMD EPYC (x86_64) CPUs.
+  # Format:
+  #   ubuntu/$PRODUCT/$RELEASE/stable/current/$ARCH/$VIRT_TYPE/$VOL_TYPE/ami-id
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/canonical/ubuntu/server/26.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
+
+  AccessPrefixListId:
+    Type: String
+    AllowedPattern: "^pl-[0-9a-f]{8,17}$"
+    Description: >
+      Id of the managed prefix list allowed to open SSH (port 22) on the
+      instance, e.g. pl-12345678.
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to deploy the inference server into.
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 key pair attached to the instance for SSH access.
+
+  TailscaleTag:
+    Type: String
+    Default: sandbox
+    AllowedPattern: "^(?!tag:)[a-z0-9-]+(\\.[a-z0-9-]+)*$"
+    Description: >
+      Tailscale tag advertised by the instance, without the "tag:" prefix
+      (e.g. "sandbox"). The auth key (or a pre-approved tag) must grant this
+      tag, or the node's membership will fail.
+
+  TailscaleAuthKeyParameterName:
+    Type: String
+    Default: tailscale-auth-key
+    Description: >
+      Name of the SSM SecureString parameter holding the Tailscale auth key,
+      in the same region as the stack, without a leading "/" (e.g.
+      prod/tailscale/auth-key). It is read by the instance at boot; the
+      instance role is granted ssm:GetParameter on it (plus kms:Decrypt if
+      the parameter is encrypted with a customer-managed KMS key). Rotating
+      the key is a put-parameter; newly launched instances pick it up
+      without a stack update.
+
+  IsSpotInstance:
+    Type: String
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "No"
+    Description: Provision a spot instance (Yes) or an on-demand instance (No).
+
+Conditions:
+  UseSpotInstance: !Equals [!Ref IsSpotInstance, "Yes"]
+
+Resources:
+  InferenceInstanceRole:
+    Type: AWS::IAM::Role
+    # Grants SSM access (aws ssm start-session) without SSH or a key pair.
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      # Lets the instance read the Tailscale auth key from the SSM
+      # SecureString at boot. The kms:Decrypt statement is unscoped because
+      # the template does not know the ARN of the customer-managed key (if
+      # any) the parameter is encrypted with.
+      Policies:
+        - PolicyName: read-tailscale-auth-key
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${TailscaleAuthKeyParameterName}"
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: "*"
+
+  InferenceInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InferenceInstanceRole
+
+  InferenceServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: inference-server-sg
+      GroupDescription: Allow SSH only from the managed prefix list
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourcePrefixListId: !Ref AccessPrefixListId
+
+  InferenceServerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    # Launch template names are unique per region and cannot be deleted while
+    # an EC2 instance references them, so appending Version to the name forces
+    # a new template to be created on stack update instead of a failing update.
+    Properties:
+      LaunchTemplateName: !Sub inference-server-lt-${Version}
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyPairName
+        IamInstanceProfile:
+          Name: !Ref InferenceInstanceProfile
+        # Sub runs only on the small SSM/login chunk below: a Sub over the
+        # whole script would try to resolve every shell ${...} as a template
+        # parameter. The chunk fetches the auth key from Parameter Store at
+        # boot (SecureStrings cannot be resolved into template parameters by
+        # CloudFormation). (Fn::Join because !Base64 !Sub is not valid YAML.)
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+              - ''
+              - - |
+                  #!/bin/bash
+                  set -euo pipefail
+
+                  # cloud-init runs this in a minimal environment where HOME is not
+                  # set; default to root's home (the script runs as root).
+                  export HOME="${HOME:-/root}"
+
+                  # Every step is idempotent (cloud-init user-data runs once; if the
+                  # fallback reboot below ever fires, the same script must be safe to
+                  # re-run and pick up where it left off).
+                  log() { echo "[inference-setup] $*"; }
+
+                  # 1. Tailscale
+                  log "Installing Tailscale"
+                  curl -fsSL https://tailscale.com/install.sh | sh
+
+                  # Authenticate with the auth key from Parameter Store (SecureString),
+                  # fetched with the AWS CLI (not installed on the AMI by default).
+                  # The key is only ever held in a shell variable: it is never echoed
+                  # or logged (cloud-init only records this script's stdout/stderr),
+                  # and is cleared from the shell's memory as soon as login finishes.
+                - !Sub |
+                  log "Installing AWS CLI (to read the Tailscale auth key from Parameter Store)"
+                  apt-get update
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y unzip
+                  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+                  unzip -q /tmp/awscliv2.zip -d /tmp
+                  /tmp/aws/install --update
+                  rm -rf /tmp/aws /tmp/awscliv2.zip
+                  TS_AUTH_KEY="$(aws ssm get-parameter --name '${TailscaleAuthKeyParameterName}' --with-decryption --query 'Parameter.Value' --output text)"
+                  if [ -z "$TS_AUTH_KEY" ] || [ "$TS_AUTH_KEY" = "None" ]; then
+                  log "ERROR: could not read Tailscale auth key from Parameter Store (${TailscaleAuthKeyParameterName}); aborting"
+                  exit 1
+                  fi
+                  tailscale login --advertise-tags=tag:${TailscaleTag} --hostname=ec2-inference-server --operator=ubuntu --auth-key="$TS_AUTH_KEY"
+                  unset TS_AUTH_KEY
+                - |
+                  # 2. NVIDIA driver (meta-package: kernel module + firmware + utils).
+                  log "Installing NVIDIA driver"
+                  apt-get update
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-driver-580-server
+                  # DKMS builds the kernel module for the *running* kernel and runs
+                  # depmod, so the module can normally be loaded immediately with
+                  # modprobe. A reboot is only needed as a fallback if that fails.
+                  if ! lsmod | grep -q '^nvidia'; then
+                  modprobe nvidia nvidia_uvm nvidia-modeset || true
+                  fi
+                  if ! lsmod | grep -q '^nvidia'; then
+                  log "NVIDIA kernel module still not loaded; rebooting"
+                  # cloud-init runs user-data only once, so a reboot would leave the
+                  # remaining steps unrun. Install a oneshot service that re-runs
+                  # this same script after the reboot; a successful run removes it.
+                  cat > /etc/systemd/system/inference-setup.service <<'EOF'
+                  [Unit]
+                  Description=Re-run inference server setup after reboot
+                  After=network-online.target
+                  Wants=network-online.target
+
+                  [Service]
+                  Type=oneshot
+                  ExecStart=/bin/bash /var/lib/cloud/instance/scripts/part-001
+                  RemainAfterExit=yes
+
+                  [Install]
+                  WantedBy=multi-user.target
+                  EOF
+                  systemctl daemon-reload
+                  systemctl enable inference-setup.service
+                  reboot
+                  # reboot is asynchronous and does not stop this script; stop here so
+                  # we do not keep installing into a box that is shutting down.
+                  exit 0
+                  fi
+
+                  # 3. uv (installer places it in $HOME/.local/bin)
+                  log "Installing uv"
+                  curl -LsSf https://astral.sh/uv/install.sh | sh
+                  source "$HOME/.local/bin/env"
+
+                  # 4. vLLM in an isolated Python 3.12 env at /opt/vllm
+                  log "Setting up vLLM environment"
+                  mkdir -p /opt/vllm
+                  cd /opt/vllm
+                  # Shared, world-readable HF cache so models downloaded as root are
+                  # visible to the ubuntu user and reused across launches. Owned by
+                  # ubuntu so it can also download models (root bypasses perms).
+                  export HF_HOME=/opt/vllm/hf-cache
+                  mkdir -p "$HF_HOME"
+                  chown ubuntu:ubuntu "$HF_HOME"
+                  # Install uv's managed Python under /opt/vllm instead of /root:
+                  # /root is mode 700, so the ubuntu user cannot execute the venv's
+                  # python (a symlink into /root) and every vllm launch fails with
+                  # "bad interpreter: Permission denied".
+                  export UV_PYTHON_INSTALL_DIR=/opt/vllm/uv-python
+                  uv venv --python 3.12 --seed --managed-python
+                  source .venv/bin/activate
+                  uv pip install vllm --torch-backend=auto
+                  vllm download-kernels
+
+                  # The venv and HF cache are created by root; make them readable so
+                  # the ubuntu user can activate vllm and access the models.
+                  chmod -R a+rX /opt/vllm
+
+                  # 5. Serve shortcuts for the login user (ubuntu). Optional argument:
+                  #    port (default 8000).
+                  USER_HOME="/home/ubuntu"
+                  mkdir -p "$USER_HOME"
+                  log "Writing $USER_HOME/serve-Qwen3.8-27B-FP8-dynamic.sh"
+                  cat > "$USER_HOME/serve-Qwen3.8-27B-FP8-dynamic.sh" <<'EOF'
+                  #!/usr/bin/env bash
+                  set -euo pipefail
+
+                  PORT="${1:-8000}"
+
+                  export HF_HOME=/opt/vllm/hf-cache
+                  source /opt/vllm/.venv/bin/activate
+
+                  exec vllm serve RedHatAI/Qwen3.8-27B-FP8-dynamic \
+                  --port "$PORT" \
+                  --kv-cache-dtype fp8 \
+                  --max-model-len 262144 \
+                  --gpu-memory-utilization 0.90 \
+                  --enable-prefix-caching \
+                  --mamba-cache-mode align \
+                  --speculative-config '{"method": "mtp", "num_speculative_tokens": 3}' \
+                  --reasoning-parser qwen3 \
+                  --enable-auto-tool-choice \
+                  --tool-call-parser qwen3_coder
+                  EOF
+                  chmod +x "$USER_HOME/serve-Qwen3.8-27B-FP8-dynamic.sh"
+                  chown ubuntu:ubuntu "$USER_HOME/serve-Qwen3.8-27B-FP8-dynamic.sh"
+
+                  # Second script: small model for g4dn/T4 testing. The T4 has
+                  # compute capability 7.5, so FlashAttention2 is unavailable
+                  # (use the Triton backend) and the max context must fit the 16 GB
+                  # VRAM left after the weights (verified: 24576 works).
+                  log "Writing $USER_HOME/serve-Qwen3-4B-g4dn.sh"
+                  cat > "$USER_HOME/serve-Qwen3-4B-g4dn.sh" <<'EOF'
+                  #!/usr/bin/env bash
+                  set -euo pipefail
+
+                  PORT="${1:-8000}"
+
+                  export HF_HOME=/opt/vllm/hf-cache
+                  source /opt/vllm/.venv/bin/activate
+
+                  exec vllm serve Qwen/Qwen3-4B \
+                  --port "$PORT" \
+                  --attention-backend TRITON_ATTN \
+                  --max-model-len 24576 \
+                  --gpu-memory-utilization 0.90 \
+                  --enable-prefix-caching \
+                  --enable-auto-tool-choice \
+                  --tool-call-parser qwen3_coder \
+                  --reasoning-parser qwen3
+                  EOF
+                  chmod +x "$USER_HOME/serve-Qwen3-4B-g4dn.sh"
+                  chown ubuntu:ubuntu "$USER_HOME/serve-Qwen3-4B-g4dn.sh"
+
+                  # Setup succeeded; drop the reboot-continuation service if a
+                  # previous run left it behind. No --now: this script is itself
+                  # running under the service, so stopping it would SIGTERM us
+                  # mid-cleanup; the process exits normally when the script ends.
+                  if [ -f /etc/systemd/system/inference-setup.service ]; then
+                  systemctl disable inference-setup.service || true
+                  rm -f /etc/systemd/system/inference-setup.service
+                  systemctl daemon-reload
+                  fi
+                  log "Setup complete"
+        SecurityGroupIds:
+          - !GetAtt InferenceServerSecurityGroup.GroupId
+        InstanceMarketOptions:
+          !If
+            - UseSpotInstance
+            - MarketType: spot
+              SpotOptions:
+                SpotInstanceType: one-time
+                InstanceInterruptionBehavior: terminate
+            - !Ref "AWS::NoValue"
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub inference-instance-${Version}
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Sub inference-instance-${Version}
+          - ResourceType: network-interface
+            Tags:
+              - Key: Name
+                Value: !Sub inference-instance-${Version}
+          - !If
+              - UseSpotInstance
+              - ResourceType: spot-instances-request
+                Tags:
+                  - Key: Name
+                    Value: !Sub inference-instance-${Version}
+              - !Ref "AWS::NoValue"
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: !Ref VolumeSizeGb
+              VolumeType: gp3
+              Throughput: !Ref VolumeThroughputMbs
+              Encrypted: true
+
+Outputs:
+  LaunchTemplateId:
+    Description: Launch template used to provision the inference server
+    Value: !Ref InferenceServerLaunchTemplate
