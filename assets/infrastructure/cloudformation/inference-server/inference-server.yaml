@@ -27,6 +27,10 @@ Metadata:
         Parameters:
           - TailscaleTag
           - TailscaleAuthKeyParameterName
+      - Label:
+          default: '5. Model'
+        Parameters:
+          - Model
 
 Parameters:
   Version:
@@ -117,6 +121,18 @@ Parameters:
     Default: "No"
     Description: Provision a spot instance (Yes) or an on-demand instance (No).
 
+  Model:
+    Type: String
+    Default: None
+    AllowedValues:
+      - None
+      - Qwen3.8-27B-FP8
+      - Qwen3.8-27B-NVFP4
+      - Qwen3-4B-g4dn
+    Description: >
+      Model to start serving automatically at the end of setup, by the name of
+      its serve script (e.g. Qwen3.8-27B-FP8 starts serve-Qwen3.8-27B-FP8.sh). "None" leaves the server installed but not running.
+
 Conditions:
   UseSpotInstance: !Equals [!Ref IsSpotInstance, "Yes"]
 
@@ -201,7 +217,18 @@ Resources:
                   # Every step is idempotent (cloud-init user-data runs once; if the
                   # fallback reboot below ever fires, the same script must be safe to
                   # re-run and pick up where it left off).
-                  log() { echo "[inference-setup] $*"; }
+                  # High-level progress log: one timestamped line per key event, written
+                  # as we go so this single file shows exactly where setup is (first line
+                  # = start, last line = the terminal event). It is appended, never truncated, so a
+                  # reboot re-run keeps the original start timestamp and the first/last
+                  # timestamps still bracket the total wall-clock time.
+                  LOG_FILE=/var/log/inference-setup.log
+                  log() {
+                  local ts
+                  ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+                  echo "$ts [inference-setup] $*" | tee -a "$LOG_FILE"
+                  }
+                  log "Setup started"
 
                   # 1. Tailscale
                   log "Installing Tailscale"
@@ -227,6 +254,7 @@ Resources:
                   fi
                   tailscale login --advertise-tags=tag:${TailscaleTag} --hostname=ec2-inference-server --operator=ubuntu --auth-key="$TS_AUTH_KEY"
                   unset TS_AUTH_KEY
+                  log "Tailscale authenticated"
                 - |
                   # 2. NVIDIA driver (meta-package: kernel module + firmware + utils)
                   # plus nvtop for live GPU monitoring.
@@ -252,6 +280,11 @@ Resources:
 
                   [Service]
                   Type=oneshot
+                  # The re-run can block for many minutes (it re-runs the whole script,
+                  # including the slow vLLM install). Disable the oneshot start timeout
+                  # so systemd does not SIGTERM the script part-way through; the script
+                  # self-terminates on its own. Use infinity, not 0, to reliably disable.
+                  TimeoutStartSec=infinity
                   ExecStart=/bin/bash /var/lib/cloud/instance/scripts/part-001
                   RemainAfterExit=yes
 
@@ -260,11 +293,14 @@ Resources:
                   EOF
                   systemctl daemon-reload
                   systemctl enable inference-setup.service
+                  log "REBOOT: restarting now to load the NVIDIA kernel module; setup resumes via the inference-setup service after reboot"
                   reboot
                   # reboot is asynchronous and does not stop this script; stop here so
                   # we do not keep installing into a box that is shutting down.
                   exit 0
                   fi
+
+                  log "NVIDIA driver ready"
 
                   # 3. uv (installer places it in $HOME/.local/bin)
                   log "Installing uv"
@@ -290,6 +326,7 @@ Resources:
                   source .venv/bin/activate
                   uv pip install vllm --torch-backend=auto
                   vllm download-kernels
+                  log "vLLM installed (venv + kernels)"
 
                   # The venv and HF cache are created by root; make them readable so
                   # the ubuntu user can activate vllm and access the models.
@@ -375,16 +412,80 @@ Resources:
                   chmod +x "$USER_HOME/serve-Qwen3-4B-g4dn.sh"
                   chown ubuntu:ubuntu "$USER_HOME/serve-Qwen3-4B-g4dn.sh"
 
-                  # Setup succeeded; drop the reboot-continuation service if a
-                  # previous run left it behind. No --now: this script is itself
-                  # running under the service, so stopping it would SIGTERM us
-                  # mid-cleanup; the process exits normally when the script ends.
+                  # Setup succeeded. Disable the reboot-continuation service so it does
+                  # not start again on a future boot. Do NOT rm the unit file or
+                  # daemon-reload here: this script is itself running under that service,
+                  # and re-reading a now-missing unit mid-start makes systemd reset the
+                  # running job to a default-timeout synthetic unit and kill it. Leaving
+                  # the (now-disabled) file in place keeps the running job's definition
+                  # intact; it will not start again because the enable symlink is gone.
                   if [ -f /etc/systemd/system/inference-setup.service ]; then
                   systemctl disable inference-setup.service || true
-                  rm -f /etc/systemd/system/inference-setup.service
-                  systemctl daemon-reload
                   fi
                   log "Setup complete"
+                - !Sub |
+                  # 6. Optionally start serving the selected model now that setup is
+                  # complete. The Model parameter selects one of the serve scripts
+                  # written above; "None" skips the launch. Only ${Model} is substituted
+                  # by !Sub (it resolves named template parameters); every other $VAR in
+                  # this chunk passes through untouched for the shell.
+                  if [ "${Model}" != "None" ]; then
+                  # Run vLLM as its own supervised systemd service (not a nohup child):
+                  # restarted on crash, logged to the journal, outlives this script.
+                  log "Configuring vllm-serve.service for ${Model} (serve-${Model}.sh)"
+                  cat > /etc/systemd/system/vllm-serve.service <<'EOF'
+                  [Unit]
+                  Description=vLLM inference server
+                  After=network-online.target
+
+                  [Service]
+                  Type=simple
+                  ExecStart=/bin/bash /home/ubuntu/serve-${Model}.sh
+                  Restart=on-failure
+                  RestartSec=30
+                  TimeoutStartSec=infinity
+
+                  [Install]
+                  WantedBy=multi-user.target
+                  EOF
+                  systemctl daemon-reload
+                  systemctl enable vllm-serve.service
+                  systemctl start vllm-serve.service
+                  log "Started vllm-serve.service"
+                  # Poll /health until the model is downloaded and loaded (can take many
+                  # minutes on a first run); log progress every ~2.5 min so the wait is
+                  # not mistaken for a hang. --max-time bounds each probe; curl -fs is
+                  # non-zero while the server is down (set -e does not fire in the
+                  # if-condition). SECONDS counts only this wait.
+                  log "Waiting for vLLM to be ready (downloading model + loading into GPU); this can take many minutes"
+                  VLLM_READY=0
+                  VLLM_FAILED=0
+                  SECONDS=0
+                  for i in $(seq 1 240); do
+                  if curl -fs --max-time 5 http://localhost:8000/health >/dev/null 2>&1; then
+                  VLLM_READY=1
+                  break
+                  fi
+                  if [ "$(systemctl show -p ActiveState --value vllm-serve.service 2>/dev/null)" = "failed" ]; then
+                  VLLM_FAILED=1
+                  log "ERROR: vllm-serve.service failed to start; see journalctl -u vllm-serve"
+                  break
+                  fi
+                  if [ $((i % 15)) -eq 0 ]; then
+                  log "vLLM not ready yet ($SECONDS s elapsed); still downloading/loading - see journalctl -u vllm-serve"
+                  fi
+                  sleep 10
+                  done
+                  if [ "$VLLM_READY" = "1" ]; then
+                  log "vLLM ready to serve at http://localhost:8000 (took $SECONDS s)"
+                  else
+                  if [ "$VLLM_FAILED" = "0" ]; then
+                  log "ERROR: vLLM did not become ready within timeout; see journalctl -u vllm-serve"
+                  fi
+                  fi
+                  else
+                  log "No model selected; vLLM installed but not started"
+                  fi
         SecurityGroupIds:
           - !GetAtt InferenceServerSecurityGroup.GroupId
         InstanceMarketOptions:
