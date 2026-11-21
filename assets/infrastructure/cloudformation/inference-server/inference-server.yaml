@@ -228,10 +228,11 @@ Resources:
                   tailscale login --advertise-tags=tag:${TailscaleTag} --hostname=ec2-inference-server --operator=ubuntu --auth-key="$TS_AUTH_KEY"
                   unset TS_AUTH_KEY
                 - |
-                  # 2. NVIDIA driver (meta-package: kernel module + firmware + utils).
+                  # 2. NVIDIA driver (meta-package: kernel module + firmware + utils)
+                  # plus nvtop for live GPU monitoring.
                   log "Installing NVIDIA driver"
                   apt-get update
-                  DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-driver-580-server
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-driver-580-server nvtop
                   # DKMS builds the kernel module for the *running* kernel and runs
                   # depmod, so the module can normally be loaded immediately with
                   # modprobe. A reboot is only needed as a fallback if that fails.
