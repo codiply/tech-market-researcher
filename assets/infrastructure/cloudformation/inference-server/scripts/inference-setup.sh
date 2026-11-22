@@ -25,18 +25,21 @@ echo "$ts [inference-setup] $*" | tee -a "$LOG_FILE"
 }
 log "Setup started"
 
-# 0. Setup-log viewer: a tiny, dependency-free HTTP server on port
-# 8888 that shows the server's logs in a tabbed, self-refreshing
-# HTML page, so progress can be watched in a browser on the
-# instance's Tailscale hostname without SSH. Installed first so the
-# page is live as soon as Tailscale login gives the instance its
-# tailnet name. Enabled (not just started) so it survives reboots.
-# The logs shown contain only setup/infrastructure output.
-cat > /usr/local/bin/inference-log-viewer.py <<'EOF'
+# 0. Dashboard: a tiny, dependency-free HTTP server on port 8888
+# with two pages: /dashboard (main page: one-line server status from
+# the setup log, live CPU/memory/load/GPU stats and sparkline history)
+# and /logs (tabbed, self-refreshing logs); the root URL redirects to
+# /dashboard. Installed first so the page is live as soon as Tailscale
+# login gives the instance its tailnet name. Enabled (not just started)
+# so it survives reboots. The logs contain only setup/infrastructure
+# output; the dashboard shows the GPU once the NVIDIA driver is
+# installed (it displays a notice until then).
+cat > /usr/local/bin/inference-dashboard.py <<'EOF'
 #!/usr/bin/env python3
-"""Serve the inference server's logs as a tabbed, self-refreshing HTML page."""
+"""Serve the inference server dashboard: a logs page and a live metrics page."""
 import html
 import http.server
+import json
 import subprocess
 from urllib.parse import parse_qs, urlparse
 
@@ -96,10 +99,12 @@ cursor:pointer;font-family:inherit}}
 select{{background:#222;color:#ddd;border:1px solid #444;border-radius:4px;
 padding:.4em;font-family:inherit}}
 pre{{flex:1;overflow-y:auto;padding:1em;white-space:pre-wrap}}
+a.metlink{{background:#222;color:#9ecbff;border:1px solid #444;border-radius:4px;
+padding:.4em .8em;margin-right:.5em;text-decoration:none;font-family:inherit}}
 </style></head>
 <body>
 <h2>inference server logs (auto-refreshes every 5 s, <span id="status"></span>)</h2>
-<nav>{buttons}
+<nav><a class="metlink" href="/dashboard">Dashboard</a>{buttons}
 <label>Lines: <select id="lines">
 <option value="500">500</option>
 <option value="2000">2000</option>
@@ -170,11 +175,177 @@ show('setup');
 </body></html>
 """
 
+# --- Metrics --------------------------------------------------------
+
+_last_cpu = None
+
+def cpu_util_pct():
+    """CPU utilization % since the previous call (None on the first call)."""
+    global _last_cpu
+    with open("/proc/stat") as f:
+        cur = list(map(int, f.readline().split()[1:]))
+    total, idle = sum(cur), cur[3] + (cur[4] if len(cur) > 4 else 0)
+    util = None
+    if _last_cpu is not None and total > _last_cpu[0]:
+        dt, di = total - _last_cpu[0], idle - _last_cpu[1]
+        util = round(100.0 * (dt - di) / dt, 1)
+    _last_cpu = (total, idle)
+    return util
+
+def mem_gb():
+    """(used, total) RAM in GB from /proc/meminfo."""
+    info = {}
+    with open("/proc/meminfo") as f:
+        for line in f:
+            k, v = line.split(":", 1)
+            info[k] = int(v.strip().split()[0])  # kB
+    total, avail = info.get("MemTotal", 0), info.get("MemAvailable", 0)
+    return (total - avail) / 1048576.0, total / 1048576.0
+
+def load_avg():
+    with open("/proc/loadavg") as f:
+        return f.read().split()[:3]
+
+def gpu_stats():
+    """Per-GPU stats from nvidia-smi, or None until the driver is installed."""
+    fields = ",".join(("name", "utilization.gpu", "memory.used", "memory.total",
+                       "temperature.gpu", "power.draw", "clocks.sm"))
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", f"--query-gpu={fields}", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10)
+        if out.returncode != 0:
+            return None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    gpus = []
+    for row in (r.strip() for r in out.stdout.strip().splitlines()):
+        c = row.split(",")
+        gpus.append({"name": c[0], "util": float(c[1]), "mem_used": int(c[2]),
+                     "mem_total": int(c[3]), "temp": float(c[4]),
+                     "power": float(c[5]), "clock": float(c[6])})
+    return gpus
+
+def setup_status():
+    """Last non-empty line of the high-level setup log (one-line server status)."""
+    try:
+        with open("/var/log/inference-setup.log") as f:
+            lines = [l.strip() for l in f if l.strip()]
+        return lines[-1] if lines else ""
+    except FileNotFoundError:
+        return ""
+
+def dashboard_data():
+    mem_used, mem_total = mem_gb()
+    return {"status": setup_status(),
+            "cpu_pct": cpu_util_pct(), "gpus": gpu_stats(),
+            "mem": {"used": round(mem_used, 1), "total": round(mem_total, 1)},
+            "load": load_avg()}
+
+DASHBOARD_HTML = """<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>inference server dashboard</title>
+<style>
+body{background:#111;color:#ddd;font-family:monospace;margin:0}
+h2{padding:.5em 1em;margin:0}
+nav{padding:.5em 1em;background:#181818;border-bottom:1px solid #333}
+a{background:#222;color:#9ecbff;border:1px solid #444;border-radius:4px;
+padding:.4em .8em;text-decoration:none;font-family:inherit}
+section{padding:1em}
+h3{margin:0 0 .5em;color:#9ecbff}
+.row{display:flex;align-items:center;gap:1em;margin:.4em 0}
+.bar{width:300px;height:14px;background:#222;border-radius:3px}
+.bar div{height:100%;background:#2d6cdf;border-radius:3px}
+.warn{color:#e0a35a}
+.chrow{display:flex;align-items:center;gap:1em;margin:.3em 0}
+.chrow .cl{width:240px}
+.chrow svg{background:#181818;border-radius:3px}
+.chrow .cv{width:100px;text-align:right;color:#9ecbff}
+</style></head>
+<body>
+<h2>inference server dashboard (auto-refreshes every 2 s)</h2>
+<nav><a href="/logs">Logs</a></nav>
+<section><h3>Status</h3><div id="status">&hellip;</div></section>
+<section id="gpu"><h3>GPU</h3><div class="warn">loading&hellip;</div></section>
+<section id="sys"><h3>CPU / Memory</h3></section>
+<section><h3>History (up to 15 minutes)</h3><div id="charts"></div></section>
+<script>
+// History is in memory only: each page load starts from an empty
+// window (sample shape {t, c: cpu_pct, m: ram GB, g: gpus}, max 15 min at 2 s).
+var M = 450, H = [];
+function push(d) {
+  H.push({t: Date.now(), c: d.cpu_pct, m: d.mem.used, g: d.gpus});
+  if (H.length > M) H = H.slice(H.length - M);
+}
+function series(get) { return H.map(get); }
+function chart(label, values, unit) {
+  var w = 560, h = 48;
+  var v = values.filter(function(x) { return x !== null; });
+  if (!v.length || values.length < 2) return '';
+  var min = Math.min.apply(null, v), max = Math.max.apply(null, v);
+  if (max - min < 1e-6) max = min + 1;
+  var pts = [];
+  values.forEach(function(x, i) {
+    if (x !== null) pts.push([i / (values.length - 1) * w, h - (x - min) / (max - min) * h]);
+  });
+  var line = pts.map(function(p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+  var area = '0,' + h + ' ' + line + ' ' + pts[pts.length - 1][0].toFixed(1) + ',' + h;
+  return '<div class="chrow"><span class="cl">' + label + '</span>' +
+    '<svg width="' + w + '" height="' + h + '">' +
+    '<polygon points="' + area + '" fill="#1d3d6b"/>' +
+    '<polyline points="' + line + '" fill="none" stroke="#5b9bd5" stroke-width="1.5"/></svg>' +
+    '<span class="cv">' + v[v.length - 1] + unit + '</span></div>';
+}
+function bar(p) { return '<div class="bar"><div style="width:' + p + '%"></div></div>' + p + '%'; }
+function render(d) {
+  document.getElementById('status').textContent = d.status || '(no status yet)';
+  var g = document.getElementById('gpu');
+  if (!d.gpus) {
+    g.innerHTML = '<div class="warn">NVIDIA driver not available (yet) &mdash; setup may still be installing it</div>';
+  } else {
+    g.innerHTML = d.gpus.map(function(x, i) {
+      return '<div class="row">GPU ' + i + ' (' + x.name + ') ' + bar(x.util) +
+        ' &nbsp; VRAM ' + x.mem_used + '/' + x.mem_total + ' MiB &nbsp; '
+        + x.temp + '&deg;C &nbsp; ' + x.power + ' W &nbsp; ' + x.clock + ' MHz</div>';
+    }).join('');
+  }
+  var c = document.getElementById('sys');
+  c.innerHTML = '<h3>CPU / Memory</h3>' +
+    '<div class="row">CPU ' + bar(d.cpu_pct === null ? 0 : d.cpu_pct) + (d.cpu_pct === null ? ' (waiting for first sample)' : '') + '</div>' +
+    '<div class="row">RAM ' + d.mem.used + ' / ' + d.mem.total + ' GB</div>' +
+    '<div class="row">Load ' + d.load.join(' ') + '</div>';
+  var charts = '';
+  charts += chart('CPU', series(function(s) { return s.c; }), '%');
+  charts += chart('RAM', series(function(s) { return s.m; }), ' GB');
+  if (d.gpus) d.gpus.forEach(function(g, i) {
+    charts += chart('GPU ' + i + ' utilization', series(function(s) { return s.g ? s.g[i].util : null; }), '%');
+    charts += chart('GPU ' + i + ' VRAM', series(function(s) { return s.g ? s.g[i].mem_used : null; }), ' MiB');
+    charts += chart('GPU ' + i + ' temperature', series(function(s) { return s.g ? s.g[i].temp : null; }), ' °C');
+    charts += chart('GPU ' + i + ' power', series(function(s) { return s.g ? s.g[i].power : null; }), ' W');
+  });
+  document.getElementById('charts').innerHTML = charts || '<div class="warn">collecting samples&hellip;</div>';
+}
+function tick() { fetch('/dashboard/data').then(function(r) { return r.json(); }).then(function(d) { push(d); render(d); }); }
+tick();
+setInterval(tick, 2000);
+</script>
+</body></html>
+"""
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/":
+            self.send_response(302)
+            self.send_header("Location", "/dashboard")
+            self.end_headers()
+            return
+        elif parsed.path == "/logs":
             body, ctype = shell().encode(), "text/html; charset=utf-8"
+        elif parsed.path == "/dashboard":
+            body, ctype = DASHBOARD_HTML.encode(), "text/html; charset=utf-8"
+        elif parsed.path == "/dashboard/data":
+            body, ctype = json.dumps(dashboard_data()).encode(), "application/json"
         elif parsed.path.startswith("/log/"):
             lines = DEFAULT_LINES
             for v in parse_qs(parsed.query).get("lines", []):
@@ -203,14 +374,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 EOF
-cat > /etc/systemd/system/inference-log-viewer.service <<'EOF'
+cat > /etc/systemd/system/inference-dashboard.service <<'EOF'
 [Unit]
-Description=Serve inference setup log over HTTP
+Description=Serve inference dashboard (logs and metrics) over HTTP
 After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /usr/local/bin/inference-log-viewer.py
+ExecStart=/usr/bin/python3 /usr/local/bin/inference-dashboard.py
 Restart=always
 RestartSec=3
 
@@ -218,9 +389,9 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable inference-log-viewer.service
-systemctl start inference-log-viewer.service
-log "Setup log viewer running on port 8888 (http://ec2-inference-server.<tailnet>.ts.net:8888)"
+systemctl enable inference-dashboard.service
+systemctl start inference-dashboard.service
+log "Dashboard running on port 8888 (http://${TS_HOSTNAME}.<tailnet>.ts.net:8888)"
 
 # 1. Tailscale
 log "Installing Tailscale"
@@ -243,7 +414,7 @@ if [ -z "$TS_AUTH_KEY" ] || [ "$TS_AUTH_KEY" = "None" ]; then
 log "ERROR: could not read Tailscale auth key from Parameter Store (${TS_AUTH_KEY_PARAM}); aborting"
 exit 1
 fi
-tailscale login --advertise-tags=tag:${TS_TAG} --hostname=ec2-inference-server --operator=ubuntu --auth-key="$TS_AUTH_KEY"
+tailscale login --advertise-tags=tag:${TS_TAG} --hostname="${TS_HOSTNAME}" --operator=ubuntu --auth-key="$TS_AUTH_KEY"
 unset TS_AUTH_KEY
 log "Tailscale authenticated"
 # 2. NVIDIA driver (meta-package: kernel module + firmware + utils)
@@ -251,14 +422,25 @@ log "Tailscale authenticated"
 log "Installing NVIDIA driver"
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-driver-580-server nvtop
+# On the very first boot the box has no NVIDIA driver yet, so udev
+# auto-loads nouveau, which claims the GPU. The blacklist the driver
+# package installs only takes effect from the *next* boot, so unload
+# nouveau here (a headless box has no open references); if it is in
+# use, the reboot fallback below recovers, because the blacklist then
+# applies and nouveau does not re-claim the GPU.
+if lsmod | grep -q '^nouveau'; then
+modprobe -r nouveau || true
+fi
 # DKMS builds the kernel module for the *running* kernel and runs
 # depmod, so the module can normally be loaded immediately with
-# modprobe. A reboot is only needed as a fallback if that fails.
-if ! lsmod | grep -q '^nvidia'; then
+# modprobe.
 modprobe nvidia nvidia_uvm nvidia-modeset || true
-fi
-if ! lsmod | grep -q '^nvidia'; then
-log "NVIDIA kernel module still not loaded; rebooting"
+# Check that the driver actually owns a GPU, not merely that the module
+# is loaded: the module can load with zero devices (e.g. if another
+# driver still claims the GPU) and still pass a bare lsmod check, which
+# would let a broken box continue into the vLLM install and fail there.
+if ! nvidia-smi -L >/dev/null 2>&1; then
+log "NVIDIA driver has no GPU (module not bound); rebooting"
 # cloud-init runs user-data only once, so a reboot would leave the
 # remaining steps unrun. Install a oneshot service that re-runs
 # this same script after the reboot; a successful run removes it.
@@ -322,22 +504,25 @@ log "vLLM installed (venv + kernels)"
 # the ubuntu user can activate vllm and access the models.
 chmod -R a+rX /opt/vllm
 
-# 5. Serve shortcuts for the login user (ubuntu). Optional argument:
-#    port (default 8000).
+# 5. Serve shortcuts for the login user (ubuntu).
 USER_HOME="/home/ubuntu"
 mkdir -p "$USER_HOME"
+# Shared prologue for all serve scripts: venv, shared HF cache, and the
+# serving port (defined once here, used by every serve script).
+cat > "$USER_HOME/serve.env" <<'EOF'
+export HF_HOME=/opt/vllm/hf-cache
+export SERVING_PORT=8000
+source /opt/vllm/.venv/bin/activate
+EOF
 log "Writing $USER_HOME/serve-Qwen3.8-27B-FP8.sh"
 cat > "$USER_HOME/serve-Qwen3.8-27B-FP8.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT="${1:-8000}"
-
-export HF_HOME=/opt/vllm/hf-cache
-source /opt/vllm/.venv/bin/activate
+source /home/ubuntu/serve.env
 
 exec vllm serve Qwen/Qwen3.8-27B-FP8 \
---port "$PORT" \
+--port "$SERVING_PORT" \
 --max-model-len 262144 \
 --max-num-seqs 128 \
 --gpu-memory-utilization 0.92 \
@@ -347,22 +532,17 @@ exec vllm serve Qwen/Qwen3.8-27B-FP8 \
 --tool-call-parser qwen3_coder \
 --speculative-config '{"method": "mtp", "num_speculative_tokens": 3}'
 EOF
-chmod +x "$USER_HOME/serve-Qwen3.8-27B-FP8.sh"
-chown ubuntu:ubuntu "$USER_HOME/serve-Qwen3.8-27B-FP8.sh"
 
 log "Writing $USER_HOME/serve-Qwen3.8-27B-NVFP4.sh"
 cat > "$USER_HOME/serve-Qwen3.8-27B-NVFP4.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT="${1:-8000}"
-
-export HF_HOME=/opt/vllm/hf-cache
-source /opt/vllm/.venv/bin/activate
+source /home/ubuntu/serve.env
 
 # NVFP4 QAD checkpoint from Model Optimizer; requires --quantization modelopt.
 exec vllm serve nvidia/Qwen3.8-27B-NVFP4-QAD \
---port "$PORT" \
+--port "$SERVING_PORT" \
 --quantization modelopt \
 --max-model-len 262144 \
 --max-num-seqs 128 \
@@ -372,8 +552,6 @@ exec vllm serve nvidia/Qwen3.8-27B-NVFP4-QAD \
 --enable-auto-tool-choice \
 --tool-call-parser qwen3_coder
 EOF
-chmod +x "$USER_HOME/serve-Qwen3.8-27B-NVFP4.sh"
-chown ubuntu:ubuntu "$USER_HOME/serve-Qwen3.8-27B-NVFP4.sh"
 
 # Second script: small model for g4dn/T4 testing. The T4 has
 # compute capability 7.5, so FlashAttention2 is unavailable
@@ -384,13 +562,10 @@ cat > "$USER_HOME/serve-Qwen3-4B.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT="${1:-8000}"
-
-export HF_HOME=/opt/vllm/hf-cache
-source /opt/vllm/.venv/bin/activate
+source /home/ubuntu/serve.env
 
 exec vllm serve Qwen/Qwen3-4B \
---port "$PORT" \
+--port "$SERVING_PORT" \
 --attention-backend TRITON_ATTN \
 --max-model-len 24576 \
 --gpu-memory-utilization 0.90 \
@@ -399,8 +574,10 @@ exec vllm serve Qwen/Qwen3-4B \
 --tool-call-parser qwen3_coder \
 --reasoning-parser qwen3
 EOF
-chmod +x "$USER_HOME/serve-Qwen3-4B.sh"
-chown ubuntu:ubuntu "$USER_HOME/serve-Qwen3-4B.sh"
+for f in serve.env serve-Qwen3.8-27B-FP8.sh serve-Qwen3.8-27B-NVFP4.sh serve-Qwen3-4B.sh; do
+chmod +x "$USER_HOME/$f"
+chown ubuntu:ubuntu "$USER_HOME/$f"
+done
 
 # Setup succeeded. Disable the reboot-continuation service so it does
 # not start again on a future boot. Do NOT rm the unit file or

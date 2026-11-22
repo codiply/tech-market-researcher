@@ -56,17 +56,28 @@ Replace `<MODEL_ID>` with the model served by the script (or query `http://local
 
 ## Logs
 
-### Web log viewer (on the tailnet)
+### Web dashboard (on the tailnet)
 
-The instance runs `inference-log-viewer`, a small HTTP service on port **8888**
-that shows all of the logs below in a tabbed, auto-refreshing page — open
-`http://ec2-inference-server.<tailnet>.ts.net:8888` in a browser to watch setup
-progress from the tailnet without SSH. Each tab refreshes every 5 seconds;
-the number of lines shown defaults to 500 and can be changed per tab
-(2000 / 10000 / All) via the **Lines** selector, which is remembered
-between visits. It has no authentication: assume anyone who can
-reach the instance over the tailnet can read these logs (they contain setup
-and service output only, no model input/output).
+The instance runs `inference-dashboard`, a small HTTP service on port **8888**
+with two pages, both reachable from the tailnet without SSH:
+
+- **Dashboard** (`/dashboard`, where the bare root URL redirects): the main
+  page. Shows a one-line server status (the last entry of the high-level
+  setup log), live CPU utilization, RAM, load average and per-GPU stats
+  (utilization, VRAM, temperature, power, clock), plus sparkline history
+  (CPU, GPU utilization, VRAM and power for up to 15 minutes), refreshing
+  every 2 seconds. The sparkline history resets when the page is closed.
+  The GPU section shows a "driver not available" notice until the NVIDIA
+  driver is installed, then starts reporting automatically.
+- **Logs** (`/logs`): shows all of the logs below in a tabbed, auto-refreshing
+  page — open `http://ec2-inference-server.<tailnet>.ts.net:8888` in a browser
+to watch setup progress. Each tab refreshes every 5 seconds; the number of
+  lines shown defaults to 500 and can be changed per tab (2000 / 10000 / All)
+  via the **Lines** selector, which is remembered between visits.
+
+It has no authentication: assume anyone who can reach the instance over the
+tailnet can read these logs (they contain setup and service output only, no
+model input/output).
 
 ### High-level progress log
 
