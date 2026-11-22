@@ -74,10 +74,18 @@ with two pages, both reachable from the tailnet without SSH:
 to watch setup progress. Each tab refreshes every 5 seconds; the number of
   lines shown defaults to 500 and can be changed per tab (2000 / 10000 / All)
   via the **Lines** selector, which is remembered between visits.
+- **Shutdown** button on the Dashboard page: asks for confirmation (stating
+  the actual consequence, since the instance knows its own shutdown
+  behavior) and then runs `shutdown -h now` on the instance. What that does
+  is set by the stack's `ShutdownBehavior` parameter (passed to the instance
+  as `InstanceInitiatedShutdownBehavior`): with `terminate` (the default) the
+  instance and its root volume are permanently deleted; with `stop` the
+  instance is only stopped and can be started again from the EC2 console.
 
 It has no authentication: assume anyone who can reach the instance over the
 tailnet can read these logs (they contain setup and service output only, no
-model input/output).
+model input/output) and shut the instance down with the dashboard's
+Shutdown button.
 
 ### High-level progress log
 

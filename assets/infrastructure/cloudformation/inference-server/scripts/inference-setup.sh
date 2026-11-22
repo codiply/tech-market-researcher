@@ -24,6 +24,7 @@ ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 echo "$ts [inference-setup] $*" | tee -a "$LOG_FILE"
 }
 log "Setup started"
+log "Shutdown behavior: ${SHUTDOWN_BEHAVIOR}"
 
 # 0. Dashboard: a tiny, dependency-free HTTP server on port 8888
 # with two pages: /dashboard (main page: one-line server status from
@@ -235,6 +236,17 @@ def setup_status():
     except FileNotFoundError:
         return ""
 
+def shutdown_behavior():
+    """Instance-initiated shutdown behavior ('stop'/'terminate') from params.env, or None."""
+    try:
+        with open("/var/lib/inference-setup/params.env") as f:
+            for line in f:
+                if line.startswith('SHUTDOWN_BEHAVIOR="'):
+                    return line.split('"')[1]
+    except FileNotFoundError:
+        pass
+    return None
+
 def dashboard_data():
     mem_used, mem_total = mem_gb()
     return {"status": setup_status(),
@@ -251,6 +263,8 @@ h2{padding:.5em 1em;margin:0}
 nav{padding:.5em 1em;background:#181818;border-bottom:1px solid #333}
 a{background:#222;color:#9ecbff;border:1px solid #444;border-radius:4px;
 padding:.4em .8em;text-decoration:none;font-family:inherit}
+button{background:#5a2323;color:#ffd7d7;border:1px solid #8b3a3a;border-radius:4px;
+padding:.4em .8em;cursor:pointer;font-family:inherit;margin-left:.5em}
 section{padding:1em}
 h3{margin:0 0 .5em;color:#9ecbff}
 .row{display:flex;align-items:center;gap:1em;margin:.4em 0}
@@ -264,7 +278,7 @@ h3{margin:0 0 .5em;color:#9ecbff}
 </style></head>
 <body>
 <h2>inference server dashboard (auto-refreshes every 2 s)</h2>
-<nav><a href="/logs">Logs</a></nav>
+<nav><a href="/logs">Logs</a><button id="shutdown">Shutdown</button></nav>
 <section><h3>Status</h3><div id="status">&hellip;</div></section>
 <section id="gpu"><h3>GPU</h3><div class="warn">loading&hellip;</div></section>
 <section id="sys"><h3>CPU / Memory</h3></section>
@@ -328,6 +342,25 @@ function render(d) {
 function tick() { fetch('/dashboard/data').then(function(r) { return r.json(); }).then(function(d) { push(d); render(d); }); }
 tick();
 setInterval(tick, 2000);
+var SHUTDOWN_BEHAVIOR = "__SHUTDOWN_BEHAVIOR__";
+document.getElementById('shutdown').onclick = function() {
+  var msg;
+  if (SHUTDOWN_BEHAVIOR === 'terminate') {
+    msg = 'Shut down this instance now? Its shutdown behavior is set to terminate, '
+      + 'so the instance and its root volume will be PERMANENTLY DELETED.';
+  } else if (SHUTDOWN_BEHAVIOR === 'stop') {
+    msg = 'Shut down this instance now? Its shutdown behavior is set to stop, so the '
+      + 'instance will only be stopped; start it again from the EC2 console afterwards.';
+  } else {
+    msg = "Shut down this instance now? Depending on the stack's ShutdownBehavior, "
+      + "it will be permanently terminated or only stopped.";
+  }
+  if (confirm(msg)) {
+    fetch('/shutdown', {method: 'POST'}).then(function(r) {
+      if (r.ok) document.body.innerHTML = '<h2>Shutting down&hellip;</h2>';
+    });
+  }
+};
 </script>
 </body></html>
 """
@@ -343,7 +376,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif parsed.path == "/logs":
             body, ctype = shell().encode(), "text/html; charset=utf-8"
         elif parsed.path == "/dashboard":
-            body, ctype = DASHBOARD_HTML.encode(), "text/html; charset=utf-8"
+            # Inject the configured shutdown behavior so the button's
+            # confirmation dialog can state its actual consequence.
+            body = DASHBOARD_HTML.replace(
+                "__SHUTDOWN_BEHAVIOR__", shutdown_behavior() or "")
+            body, ctype = body.encode(), "text/html; charset=utf-8"
         elif parsed.path == "/dashboard/data":
             body, ctype = json.dumps(dashboard_data()).encode(), "application/json"
         elif parsed.path.startswith("/log/"):
@@ -368,6 +405,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        if urlparse(self.path).path == "/shutdown":
+            # Fire-and-forget child: the OS is about to go down, so answer
+            # before waiting on it.
+            subprocess.Popen(
+                ["shutdown", "-h", "now"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            body = b"shutdown initiated"
+            self.send_response(202)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(404)
+        self.end_headers()
 
     def log_message(self, fmt, *args):  # keep requests out of the journal
         pass
