@@ -7,12 +7,32 @@ Deploying the stack requires two resources that are created manually and passed 
 - Create a managed prefix list containing the IPs that should be able to SSH into the instance, and use its `pl-…` id as the `AccessPrefixListId` parameter.
 - Create a reusable Tailscale auth key and store it as an SSM SecureString parameter, and pass its name (without a leading `/`, e.g. `tailscale-auth-key`) as the `TailscaleAuthKeyParameterName` parameter.
 
+## Modifying the setup script
+
+The setup script lives in `scripts/inference-setup.sh` next to the template,
+not in the template itself: in plaintext it exceeds EC2's 16 KiB user-data
+limit, so the template's user-data is a small trampoline that decompresses a
+gzip+base64 blob of the script and runs it (template parameters reach the
+script via `/var/lib/inference-setup/params.env`).
+
+After editing `scripts/inference-setup.sh`, regenerate the blob before
+deploying the stack — the generator rewrites the blob in the template and
+fails if the result exceeds the user-data limit:
+
+```
+python3 generate_userdata.py
+```
+
+The compressed blob leaves substantial headroom, so the script can keep
+growing; if it ever exceeds it (tens of KB), move the script to a file
+the instance fetches at boot instead.
+
 ## Model selection
 
 The stack takes a `Model` parameter (a drop-down) that controls whether vLLM is started automatically at the end of setup:
 
 - `None` (default): install everything, but don't start a server. SSH in and run a serve script manually.
-- `Qwen3.8-27B-FP8`, `Qwen3.8-27B-NVFP4`, or `Qwen3-4B-g4dn`: start the matching `serve-*.sh` right after setup finishes.
+- `Qwen3.8-27B-FP8`, `Qwen3.8-27B-NVFP4`, or `Qwen3-4B`: start the matching `serve-*.sh` right after setup finishes.
 
 When a model is selected, vLLM runs as the supervised `vllm-serve` systemd service
 (it is restarted on crash and survives reboots); its logs are covered in
@@ -35,6 +55,18 @@ curl -s http://localhost:8000/v1/chat/completions -H 'Content-Type: application/
 Replace `<MODEL_ID>` with the model served by the script (or query `http://localhost:8000/v1/models`).
 
 ## Logs
+
+### Web log viewer (on the tailnet)
+
+The instance runs `inference-log-viewer`, a small HTTP service on port **8888**
+that shows all of the logs below in a tabbed, auto-refreshing page — open
+`http://ec2-inference-server.<tailnet>.ts.net:8888` in a browser to watch setup
+progress from the tailnet without SSH. Each tab refreshes every 5 seconds;
+the number of lines shown defaults to 500 and can be changed per tab
+(2000 / 10000 / All) via the **Lines** selector, which is remembered
+between visits. It has no authentication: assume anyone who can
+reach the instance over the tailnet can read these logs (they contain setup
+and service output only, no model input/output).
 
 ### High-level progress log
 

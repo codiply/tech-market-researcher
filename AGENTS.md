@@ -18,6 +18,8 @@ The diagrams live in `documentation/design.md` (linked from the README). The mai
 
 After completing a change, check the README and documentation/design.md for statements that are now outdated or missing a newly user-visible behavior, and remind the user of anything that needs updating.
 
+If a folder contains a README, read it before editing files in that folder.
+
 ## Logging
 
 Add log statements to new functionality so agent runs can be diagnosed from the logs. Log operations (what the agent is doing), not personal or content data: never log user messages, search queries, URLs, or fetched/indexed content.
