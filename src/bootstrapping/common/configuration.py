@@ -23,6 +23,8 @@ from tech_market_researcher.core.environment import env_flag_is_true
 CONFIG_DIR = Path("config") / "bootstrapping"
 # Loader-specific path under the debug config folder.
 DEBUG_CONFIG_LOADER_PATH = Path("bootstrapping")
+# The bootstrap config used when no other name is given.
+DEFAULT_BOOTSTRAP_CONFIG_NAME = "main"
 
 
 class LlmProvider(str, Enum):
@@ -311,6 +313,7 @@ def get_config_loader() -> ConfigLoader:
             BootstrapConfig,
             CONFIG_DIR,
             ConfigLoaderParams(
+                default_config_name=DEFAULT_BOOTSTRAP_CONFIG_NAME,
                 debug_dir_path=debug_dir_path,
                 archive_dir_path=archive_dir_path,
                 archive_max_count=DEBUG_CONFIG_ARCHIVE_MAX_COUNT,

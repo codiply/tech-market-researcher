@@ -32,6 +32,8 @@ class ConfigLoaderParams(BaseModel):
     """Optional behavior settings for ConfigLoader."""
 
     common_config_name: str = "_common"
+    # The config loaded when load() is called without an explicit config name.
+    default_config_name: str = "default"
     mixins_folder_name: str = "mixins"
     local_override_filename_infix: str = "local"
     mixins_field: str = "_mixins"
@@ -203,18 +205,47 @@ class ConfigLoader(Generic[ConfigT]):
             shutil.copytree(staging_dir, debug_dir)
         logger.info("Replaced the debug dir with the latest dump: %s", debug_dir)
 
-    def validate_all_configs(self) -> None:
-        """Load every config in the base path, skipping the common config and local overrides."""
+    def list_config_names(self) -> list[str]:
+        """List every config name in the base path, excluding the common config and local overrides."""
+        names = []
         for path in sorted(self._base_path.glob(f"*.{self._params.config_file_extension}")):
             config_name = path.name[: -len(f".{self._params.config_file_extension}")]
             if config_name == self._params.common_config_name:
                 continue
             if config_name.endswith(f".{self._params.local_override_filename_infix}"):
                 continue
+            names.append(config_name)
+        return names
+
+    def validate_all_configs(self) -> None:
+        """Load every config in the base path, skipping the common config and local overrides."""
+        for config_name in self.list_config_names():
             self.load(config_name, include_local_overrides=False)
 
+    def list_mixin_names(self) -> list[str]:
+        """List every mixin name in the mixins folder, sorted; empty when the folder doesn't exist."""
+        mixins_dir = self._base_path / self._params.mixins_folder_name
+        if not mixins_dir.is_dir():
+            return []
+        return [
+            path.name[: -len(f".{self._params.config_file_extension}")]
+            for path in sorted(mixins_dir.glob(f"*.{self._params.config_file_extension}"))
+        ]
+
+    def validate_all_mixins(self) -> None:
+        """Load the default config with every mixin in the mixins folder, to check each mixin is well-formed."""
+        mixin_names = self.list_mixin_names()
+        if not mixin_names:
+            logger.info("No mixins found in %s, skipping mixin validation.", self._params.mixins_folder_name)
+            return
+        for mixin_name in mixin_names:
+            self.load(self._params.default_config_name, extra_mixins=[mixin_name], include_local_overrides=False)
+
     def load(
-        self, config_name: str, extra_mixins: list[str] | None = None, include_local_overrides: bool = True
+        self,
+        config_name: str | None = None,
+        extra_mixins: list[str] | None = None,
+        include_local_overrides: bool = True,
     ) -> ConfigT:
         """Load and validate the config.
 
@@ -223,10 +254,12 @@ class ConfigLoader(Generic[ConfigT]):
         per instance). On failure the staging dir is discarded and no archive is written.
 
         Args:
-            config_name: Name of the config to load.
+            config_name: Name of the config to load, or None to load the default config.
             extra_mixins: Names of mixins in the mixins folder, applied on top of all other layers, in order.
             include_local_overrides: When False, skip the <config_name>.<infix>.yaml override file.
         """
+        if config_name is None:
+            config_name = self._params.default_config_name
         if config_name == self._params.common_config_name:
             raise ValueError(
                 f"Cannot load '{config_name}': the common config is not a standalone config that can be loaded."

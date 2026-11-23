@@ -25,6 +25,7 @@ from tech_market_researcher.core.constants import (
     DEBUG_CONFIG_FOLDER,
     DEBUG_CONFIG_LATEST_FOLDER,
     DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR,
+    DEFAULT_CONFIG_NAME,
 )
 from tech_market_researcher.core.environment import env_flag_is_true
 
@@ -356,6 +357,7 @@ def get_config_loader() -> ConfigLoader:
             ApplicationConfig,
             CONFIG_DIR,
             ConfigLoaderParams(
+                default_config_name=DEFAULT_CONFIG_NAME,
                 debug_dir_path=debug_dir_path,
                 archive_dir_path=archive_dir_path,
                 archive_max_count=DEBUG_CONFIG_ARCHIVE_MAX_COUNT,

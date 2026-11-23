@@ -12,3 +12,15 @@ def test_validate_all_agent_configs() -> None:
     in CI/pre-commit so such breakage is caught at commit time, not at runtime.
     """
     get_config_loader().validate_all_configs()
+
+
+def test_validate_all_agent_mixins() -> None:
+    """Validate that every agent mixin in config/agent/mixins/ is well-formed.
+
+    Each mixin is applied on top of the default (dev) agent config, so a broken mixin
+    (missing file, malformed YAML, or a value that fails ApplicationConfig validation)
+    would only be discovered when someone boots the stack with that mixin. This test
+    loads all committed mixins in CI/pre-commit so such breakage is caught at commit
+    time, not at runtime.
+    """
+    get_config_loader().validate_all_mixins()

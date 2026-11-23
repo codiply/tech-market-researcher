@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any
 
+from evaluations.common.constants import DEFAULT_EVALS_CONFIG_NAME
 from tech_market_researcher.core.common import BasePydanticModel
 from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams
 from tech_market_researcher.core.constants import (
@@ -126,6 +127,7 @@ def get_config_loader() -> ConfigLoader:
             MlflowEvaluationConfig,
             CONFIG_DIR,
             ConfigLoaderParams(
+                default_config_name=DEFAULT_EVALS_CONFIG_NAME,
                 debug_dir_path=debug_dir_path,
                 archive_dir_path=archive_dir_path,
                 archive_max_count=DEBUG_CONFIG_ARCHIVE_MAX_COUNT,

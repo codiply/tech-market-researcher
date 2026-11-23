@@ -13,3 +13,14 @@ def test_validate_all_mlflow_eval_configs() -> None:
     at runtime.
     """
     get_config_loader().validate_all_configs()
+
+
+def test_validate_all_mlflow_eval_mixins() -> None:
+    """Validate that every MLflow eval mixin in config/evaluations/mlflow/mixins/ is well-formed.
+
+    Each mixin is applied on top of the main eval config, so a broken mixin (missing file,
+    malformed YAML, or a value that fails MlflowEvaluationConfig validation) would only be
+    discovered when someone runs the evals with that mixin. This test loads all committed
+    mixins in CI/pre-commit so such breakage is caught at commit time, not at runtime.
+    """
+    get_config_loader().validate_all_mixins()
