@@ -1,6 +1,6 @@
 services:
   mlflow_db:
-    image: postgres:17
+    image: postgres:17.12
     container_name: mlflow_db
     # The image ignores POSTGRES_PORT, so set the listen port via flag
     command: ["postgres", "-p", "5433"]
@@ -21,7 +21,7 @@ services:
 
   # Phoenix backend store.
   phoenix_db:
-    image: postgres:17
+    image: postgres:17.12
     container_name: phoenix_db
     environment:
       POSTGRES_USER: ${PHOENIX_DB_USER:?set PHOENIX_DB_USER in the environment}
@@ -42,7 +42,7 @@ services:
 
   # Agent database store.
   agent_db:
-    image: postgres:17
+    image: postgres:17.12
     container_name: agent_db
     environment:
       POSTGRES_USER: ${AGENT_DB_USER:?set AGENT_DB_USER in the environment}
@@ -67,7 +67,7 @@ services:
   # non-public service) and the persistence path is configured by the
   # image's own /config.yaml, so no environment variables are needed.
   chroma:
-    image: chromadb/chroma:1.0.21
+    image: chromadb/chroma:1.5.9
     container_name: chroma
     ports:
       # Chroma's default host port 8000 is a very common port, so use an
@@ -93,7 +93,7 @@ services:
   # Second vector store, used by the evals. Same image and configuration as
   # the main `chroma` service, just a separate instance and data folder.
   chroma_evals:
-    image: chromadb/chroma:1.0.21
+    image: chromadb/chroma:1.5.9
     container_name: chroma_evals
     ports:
       # Unusual host port (like SearXNG); the container listens on 8000.
@@ -148,7 +148,7 @@ services:
   # https://docs.searxng.org/admin/installation-docker.html
   searxng:
     # Pinned to a specific release tag; bump deliberately when updating.
-    image: searxng/searxng:2026.11.2-cccbc9e15
+    image: searxng/searxng:2026.11.9-57ff753ad
     container_name: searxng
     environment:
       # Required server secret (min 32 chars). Login protection is not
@@ -184,7 +184,7 @@ services:
   # The image runs as root, so the host folder needs no special ownership;
   # the permissions_fixer keeps it world-readable for the host user.
   searxng_valkey:
-    image: valkey/valkey:9.1.3-alpine
+    image: valkey/valkey:9.1.4-alpine
     container_name: searxng_valkey
     command: valkey-server --save 300 1 --save 60 1000 --loglevel warning
     volumes:
@@ -354,7 +354,7 @@ services:
   # Pinned to a specific release tag; must be > 4.0 to support the SQL
   # (Postgres) backend.
   phoenix_server:
-    image: arizephoenix/phoenix:21.0.0
+    image: arizephoenix/phoenix:22.0.1
     container_name: phoenix_server
     depends_on:
       phoenix_db:
