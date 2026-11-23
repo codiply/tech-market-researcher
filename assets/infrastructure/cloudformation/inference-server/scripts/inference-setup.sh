@@ -548,9 +548,14 @@ chown ubuntu:ubuntu "$HF_HOME"
 # python (a symlink into /root) and every vllm launch fails with
 # "bad interpreter: Permission denied".
 export UV_PYTHON_INSTALL_DIR=/opt/vllm/uv-python
+# Only create the venv if it does not exist: on a re-run (e.g. the
+# reboot fallback) the venv is already there and uv venv refuses to
+# overwrite it, which would abort the script before the vllm install.
+if [ ! -f /opt/vllm/.venv/pyvenv.cfg ]; then
 uv venv --python 3.12 --seed --managed-python
+fi
 source .venv/bin/activate
-uv pip install vllm --torch-backend=auto
+uv pip install "vllm~=0.34.0" --torch-backend=auto
 vllm download-kernels
 log "vLLM installed (venv + kernels)"
 
