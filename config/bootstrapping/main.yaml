@@ -10,6 +10,9 @@ mlflow:
       provider: bedrock
       region_name: eu-west-1
       api_key_env_var_name: BEDROCK_API_KEY
+    - api_key_name: ec2-inference-server
+      provider: openai
+      api_base_url_env_var_name: EC2_INFERENCE_BASE_URL
   endpoints:
     - name: omlx.Qwen3.8-27B-oQ4e-mtp
       model_name: Qwen3.8-27B-oQ4e-mtp
@@ -26,6 +29,15 @@ mlflow:
     - name: bedrock.eu.amazon.nova-pro-v1
       model_name: eu.amazon.nova-pro-v1:0
       api_key_name: bedrock-eu
+    - name: ec2.Qwen3-4B
+      model_name: Qwen/Qwen3-4B
+      api_key_name: ec2-inference-server
+    - name: ec2.Qwen3.8-27B-FP8
+      model_name: Qwen/Qwen3.8-27B-FP8
+      api_key_name: ec2-inference-server
+    - name: ec2.Qwen3.8-27B-NVFP4-QAD
+      model_name: nvidia/Qwen3.8-27B-NVFP4-QAD
+      api_key_name: ec2-inference-server
     # Embedding models
     - name: omlx.embeddinggemma-2-4bit
       model_name: embeddinggemma-2-4bit

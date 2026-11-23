@@ -44,9 +44,13 @@ def phoenix_evaluate(
 
     # Phoenix's sync API runs serially; the async API's `concurrency` parameter controls how
     # many tasks and evaluations run in parallel. Unset/0 leaves the Phoenix default (3).
+    # `timeout` is the per-task execution timeout in seconds; unset leaves the Phoenix
+    # default (60), which cancels and re-queues agent turns that take longer than that.
     extra: dict[str, Any] = {}
     if config.harness.max_concurrent:
         extra["concurrency"] = config.harness.max_concurrent
+    if config.harness.task_timeout:
+        extra["timeout"] = config.harness.task_timeout
 
     async def run() -> None:
         # The checkpointer binds to the loop it is built on, so build the agent on the same loop.

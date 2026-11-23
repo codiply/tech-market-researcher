@@ -1,0 +1,4 @@
+supervisor:
+  model:
+    provider: omlx
+    name: Qwen3.8-27B-oQ4e-mtp

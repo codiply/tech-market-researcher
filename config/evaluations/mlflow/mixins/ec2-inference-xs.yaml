@@ -1,0 +1,5 @@
+judge_model_name: ec2.Qwen3-4B
+harness:
+  max_workers: 2
+  max_scorer_workers: 2
+  max_retries: 3

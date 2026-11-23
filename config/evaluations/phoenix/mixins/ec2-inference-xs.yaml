@@ -1,0 +1,4 @@
+judge_model_name: ec2.Qwen3-4B
+harness:
+  max_concurrent: 2
+  task_timeout: 600

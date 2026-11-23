@@ -55,15 +55,19 @@ class EvaluatorsConfig(BasePydanticModel):
 
 
 class HarnessConfig(BasePydanticModel):
-    """Concurrency settings for the Phoenix evaluation run.
+    """Concurrency and timeout settings for the Phoenix evaluation run.
 
     ``max_concurrent`` is passed as the `concurrency` parameter of the Phoenix async
     experiment runner, which bounds the tasks and evaluations in flight.
     ``None`` or ``0`` leaves the Phoenix default (3) in place.
+    ``task_timeout`` is the per-task execution timeout in seconds; ``None`` leaves the
+    Phoenix default (60 s), which is too short for a full agent turn with tools.
     """
 
     # Max concurrent gateway requests (agent invocations and judge calls combined); 0 means no limit.
     max_concurrent: int | None = Field(default=None, ge=0)
+    # Per-task execution timeout in seconds (agent invocations and judge calls).
+    task_timeout: int | None = Field(default=None, gt=0)
 
 
 class PhoenixEvaluationConfig(BasePydanticModel):

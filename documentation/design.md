@@ -69,6 +69,7 @@ flowchart LR
     phoenix_server -->|providers call LLMs via gateway| gateway
     gateway -->|local model| macbook
     gateway -->|cloud model| aws
+    gateway -->|ec2 model| ec2
     searxng -->|queries| engines
     searxng --> valkey
     mlflow_box -->|backend store| mlflow_db
@@ -338,6 +339,7 @@ flowchart TB
     main -->|embeddings| omix
     gateway -->|local model| omix
     gateway -->|cloud model via Bedrock long-term API key| aws
+    gateway -->|ec2 model| ec2
 ```
 
 - **Newer MacBook (M5 Pro)** — dedicated to serving models through [OMLX](https://omlx.ai/), reachable over the local network. Its wired memory limit is raised as high as possible and no other applications run on it, so it is used for model serving only.
