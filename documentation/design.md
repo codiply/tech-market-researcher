@@ -40,6 +40,7 @@ flowchart LR
 
     macbook["MacBook (M5 Pro)<br/>OMLX server<br/>e.g. Qwen3.8-27B-oQ4e-mtp"]
     aws["AWS Bedrock<br/>e.g. eu.amazon.nova-2-lite-v1"]
+    ec2["EC2 inference server (vLLM)"]
     tavily["Tavily<br/>search API"]
     engines["Search engines"]
     web["Web pages"]
@@ -54,6 +55,7 @@ flowchart LR
     main -->|web page index tools, when run from the evals| chroma_evals
     main -->|filesystem tools in virtual mode| agent_fs
     main -->|embeddings, not via gateway| macbook
+    main -->|LLM requests, direct| ec2
     main -->|conversation checkpoints| agent_db
     mlflow_evals -->|runs the agent| main
     mlflow_evals -->|judge requests| gateway
@@ -310,6 +312,7 @@ flowchart TB
         end
     end
     aws["AWS Bedrock<br/>e.g. eu.amazon.nova-2-lite-v1"]
+    ec2["EC2 inference server (vLLM)"]
     subgraph phone["Mobile phone"]
         browser_ph["Browser"]
         ts_ph["Tailscale"]
@@ -327,9 +330,11 @@ flowchart TB
     ts_vm --> phoenix_server
     ts_vm --> webui
     ts_vm --> textual_app
+    ts_vm -->|tailnet| ec2
     pi -->|LLM requests| omix
     cli -->|runs| main
     main --> gateway
+    main -->|LLM requests, direct| ec2
     main -->|embeddings| omix
     gateway -->|local model| omix
     gateway -->|cloud model via Bedrock long-term API key| aws
@@ -338,5 +343,5 @@ flowchart TB
 - **Newer MacBook (M5 Pro)** — dedicated to serving models through [OMLX](https://omlx.ai/), reachable over the local network. Its wired memory limit is raised as high as possible and no other applications run on it, so it is used for model serving only.
 - **Older MacBook (host)** — runs VS Code on the host, which opens a remote CLI in the Ubuntu VM over SSH and edits the code in the VM directly using the Remote-SSH extension. A browser on the host is used to view the MLflow and Phoenix UIs and the agent's web UIs; VS Code exposes the VM's service ports on 0.0.0.0 on the host. [VMware](https://www.vmware.com/) hosts the Ubuntu VM on this machine.
 - **Ubuntu VM** — stores the code (the git repo) and runs all the scripts, the Docker services, and the [Pi](https://pi.dev) agentic harness. The Tech Market Researcher Agent is run from the CLI or from a web UI — the Gradio App (on port `8899`) or the Textual App (on port `8898`), both listening on `0.0.0.0`. It is deliberately a sandbox: it holds no secrets other than the ones this project needs and no personal user data.
-- **Models** — Pi talks directly to the OMLX server; the DeepAgents agent goes through the MLflow AI Gateway, which routes to the OMLX server (default) or to [AWS Bedrock](https://aws.amazon.com/bedrock/). The agent also talks to the OMLX server directly for document embeddings (the web page index), since the gateway does not proxy the embeddings endpoint. The gateway uses a long-term Bedrock API key to access Bedrock, which grants access to specific models only (Amazon Nova chat models) and can be activated or deactivated at will. The full list of gateway models is in [models.md](models.md).
+- **Models** — Pi talks directly to the OMLX server; the DeepAgents agent goes through the MLflow AI Gateway, which routes to the OMLX server (default) or to [AWS Bedrock](https://aws.amazon.com/bedrock/), or it talks directly to the EC2 inference server over the tailnet (when the agent config's model provider is set to `ec2_inference`). The agent also talks to the OMLX server directly for document embeddings (the web page index), since the gateway does not proxy the embeddings endpoint. The gateway uses a long-term Bedrock API key to access Bedrock, which grants access to specific models only (Amazon Nova chat models) and can be activated or deactivated at will. The full list of gateway models is in [models.md](models.md).
 - **Mobile phone** — [Tailscale](https://tailscale.com/) is a software-defined mesh VPN, running on both the Ubuntu VM and the phone. It is configured with one-way access from the phone to the VM (the VM is sandboxed), so the browser on the phone can reach any UI running on the VM, for example: the MLflow UI, Phoenix and the agent's web UIs.

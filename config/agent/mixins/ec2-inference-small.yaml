@@ -1,0 +1,4 @@
+supervisor:
+  model:
+    provider: ec2_inference
+    name: Qwen/Qwen3-4B

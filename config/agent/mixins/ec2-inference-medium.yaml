@@ -1,0 +1,4 @@
+supervisor:
+  model:
+    provider: ec2_inference
+    name: nvidia/Qwen3.8-27B-NVFP4-QAD

@@ -4,6 +4,8 @@ model_providers:
   omlx:
     base_url_env_var_name: OMLX_BASE_URL
     api_key_env_var_name: OMLX_API_KEY
+  ec2_inference:
+    base_url_env_var_name: EC2_INFERENCE_BASE_URL
 supervisor:
   system_prompt: |-
     You are a Researcher giving me insights into the Tech Market.
