@@ -74,8 +74,14 @@ class ModelConnectionDetails(BasePydanticModel):
     """Resolved connection details for one model."""
 
     model_name: str
+    provider: str
     base_url: str
     api_key: SecretStr
+
+    @property
+    def qualified_model_name(self) -> str:
+        """The model name prefixed with the provider name, e.g. ``openai::gpt-4o``."""
+        return f"{self.provider}::{self.model_name}"
 
 
 class SearchProvider(str, Enum):
@@ -316,6 +322,7 @@ def resolve_model_connection_details(
         raise ValueError(f"Unknown model provider '{model.provider}'. Available: {available}.")
     return ModelConnectionDetails(
         model_name=model.name,
+        provider=model.provider,
         base_url=provider.resolved_base_url,
         api_key=provider.api_key,
     )

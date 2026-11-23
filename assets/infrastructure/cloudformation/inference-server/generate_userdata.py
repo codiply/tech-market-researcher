@@ -60,8 +60,9 @@ def _child(node: yaml.Node, key: str) -> yaml.Node:
 
 def check_limit(template_text: str) -> int:
     """Return the final user-data base64 size, failing if it exceeds the EC2 limit."""
-    doc = yaml.compose(template_text)
-    node = doc
+    node = yaml.compose(template_text)
+    if node is None:
+        sys.exit("error: template parsed to an empty YAML document")
     for key in (
         "Resources",
         "InferenceServerLaunchTemplate",

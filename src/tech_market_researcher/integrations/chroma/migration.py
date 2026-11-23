@@ -315,12 +315,12 @@ async def migrate_if_needed(  # pylint: disable=too-many-arguments,too-many-posi
             f"a migration of collection '{name}' is in progress; retry once it finishes"
         )
     existing_model = collection.metadata.get(EMBEDDINGS_MODEL_NAME_METADATA_KEY)
-    if existing_model != embeddings_model.model_name or status is CollectionStatus.PENDING_REPAIR:
+    if existing_model != embeddings_model.qualified_model_name or status is CollectionStatus.PENDING_REPAIR:
         if mismatch_behavior is not EmbeddingModelMismatchBehavior.MIGRATE:
-            if existing_model != embeddings_model.model_name:
+            if existing_model != embeddings_model.qualified_model_name:
                 raise ValueError(
                     f"collection '{name}' was created with embeddings model {existing_model!r}, "
-                    f"but {embeddings_model.model_name!r} was requested"
+                    f"but {embeddings_model.qualified_model_name!r} was requested"
                 )
             raise ValueError(
                 f"collection '{name}' has leftovers from a crashed embedding migration; "
@@ -364,7 +364,7 @@ async def migrate_collection(
             "Migrating collection '%s' from embeddings model %r to %r",
             name,
             (source.metadata or {}).get(EMBEDDINGS_MODEL_NAME_METADATA_KEY),
-            embeddings_model.model_name,
+            embeddings_model.qualified_model_name,
         )
     else:
         # Resume: refresh the in-progress protection. A fresh marker on the parked collection
@@ -394,7 +394,7 @@ async def migrate_collection(
             metadata={
                 **inherited_metadata,
                 **(additional_metadata or {}),
-                EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model.model_name,
+                EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model.qualified_model_name,
                 MIGRATION_TEMP_FOR_METADATA_KEY: str(source.id),
                 MIGRATION_STARTED_AT_METADATA_KEY: now_iso,
             },
@@ -414,5 +414,7 @@ async def migrate_collection(
         await _clear_migration_marker(client, collection)
         await _clear_parked_marker(client, name)
         raise
-    logger.info("Migration of collection '%s' to embeddings model %r completed", name, embeddings_model.model_name)
+    logger.info(
+        "Migration of collection '%s' to embeddings model %r completed", name, embeddings_model.qualified_model_name
+    )
     return await client.get_collection(name=name, embedding_function=embedding_function)

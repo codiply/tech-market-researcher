@@ -83,7 +83,10 @@ async def get_or_create_collection(
     return await client.create_collection(
         name=name,
         embedding_function=embedding_function,
-        metadata={EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model.model_name, **(additional_metadata or {})},
+        metadata={
+            EMBEDDINGS_MODEL_NAME_METADATA_KEY: embeddings_model.qualified_model_name,
+            **(additional_metadata or {}),
+        },
     )
 
 

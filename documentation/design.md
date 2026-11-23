@@ -210,7 +210,7 @@ As an extra measure, every collection the agent creates during an evaluation run
 
 ## Embeddings model migration
 
-The collection metadata records which embeddings model produced its records (`_embeddings_model_name`), and every record carries the same key plus `_embeddings_computed_at`. When the agent resolves a collection and finds a different model than the one the config requests, the `indexing.embedding_model_mismatch_behavior` setting decides what happens: `raise` fails the run, `migrate` re-embeds the collection's records with the new model and swaps the result in under the same name, automatically, on the first index use.
+The collection metadata records which embeddings model produced its records (`_embeddings_model_name`, stored as `<provider>::<model>`), and every record carries the same key plus `_embeddings_computed_at`. When the agent resolves a collection and finds a different model than the one the config requests, the `indexing.embedding_model_mismatch_behavior` setting decides what happens: `raise` fails the run, `migrate` re-embeds the collection's records with the new model and swaps the result in under the same name, automatically, on the first index use.
 
 Chroma has no in-place re-embedding, so the migration re-embeds into a temporary collection and swaps it in. Chroma also has no locking primitive, so instead of excluding concurrent writers the migration coordinates through collection metadata, and every crash leaves the system in a state the next run can resume from.
 
