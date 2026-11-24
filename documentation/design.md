@@ -144,7 +144,7 @@ Evaluation flow, step by step:
 - **Datasets** — stored in the git repo as the source of truth.
 - **Jinja logic** — dataset records can use Jinja templating to render prompts before they are sent to the agent.
 - **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Phoenix. It can load multiple datasets and merge them into a single MLflow or Phoenix dataset.
-- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow or Phoenix depending on the selected platform.
+- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow or Phoenix depending on the selected platform. On the Phoenix platform, a run can be restricted to a subset of the dataset's records, selected by their unique ids, so individual records can be debugged without running the whole dataset.
 
 ### Scorer applicability (MLflow)
 
@@ -239,7 +239,7 @@ Configs live in `config/` (agent configs under `config/agent/`) and are resolved
 1. **Common config** — `_common.yaml` (optional): the shared baseline shared by all configs.
 2. **Named config** — `X.yaml` (required): the per-environment config (e.g. `dev.yaml`, `prd.yaml`). A missing named file is an error.
 3. **Local override** — `X.local.yaml` (optional): machine-local tweaks. Ignored by `validate_all_configs` and git-ignored (`config/**/*.local.yaml`), so it is never committed.
-4. **Extra mixins** — optional mixins passed programmatically to `ConfigLoader.load` (e.g. via the `--extra-mixins` CLI flag of the agent and bootstrap commands, and `--extra-mixins-evals` / `--extra-mixins-agent` of the evaluations command); each entry references `mixins/<name>.yaml` and is applied on top of all the layers above, in the order given. A missing extra mixin file is an error.
+4. **Extra mixins** — optional mixins passed programmatically to `ConfigLoader.load` (e.g. via the `--extra-mixin` CLI flag of the agent and bootstrap commands, and `--extra-mixin-evals` / `--extra-mixin-agent` of the evaluations command); each entry references `mixins/<name>.yaml` and is applied on top of all the layers above, in the order given. A missing extra mixin file is an error.
 
 ```mermaid
 flowchart LR
@@ -277,10 +277,10 @@ Every entry point can apply extra mixins to the config it loads, without editing
 
 | Command | Flag | Alias | Applies to | Mixins folder |
 | --- | --- | --- | --- | --- |
-| `agent_cli`, `agent_gradio_app`, `agent_textual_app` | `--extra-mixins` | `--x-mx` | the agent config | `config/agent/mixins/` |
-| `bootstrap` | `--extra-mixins` | `--x-mx` | the bootstrap config | `config/bootstrapping/mixins/` |
-| `evals` | `--extra-mixins-evals` | `--x-mx-ev` | the evaluations config | `config/evaluations/<platform>/mixins/` |
-| `evals` | `--extra-mixins-agent` | `--x-mx-ag` | the agent config | `config/agent/mixins/` |
+| `agent_cli`, `agent_gradio_app`, `agent_textual_app` | `--extra-mixin` | `--x-mx` | the agent config | `config/agent/mixins/` |
+| `bootstrap` | `--extra-mixin` | `--x-mx` | the bootstrap config | `config/bootstrapping/mixins/` |
+| `evals` | `--extra-mixin-evals` | `--x-mx-ev` | the evaluations config | `config/evaluations/<platform>/mixins/` |
+| `evals` | `--extra-mixin-agent` | `--x-mx-ag` | the agent config | `config/agent/mixins/` |
 
 A mixin is a plain YAML fragment in the mixins folder of the config it applies to, containing only the keys it overrides; each flag repetition names one mixin file (without the `.yaml` extension), and the full flag name and its alias can be mixed freely.
 

@@ -36,10 +36,10 @@ def main() -> None:
     try:
         if eval_args.platform == EvalsPlatform.MLLFLOW:
             mlflow_config = load_mlflow_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
-            mlflow_evaluate(mlflow_config, agent_args, [_update_config])
+            mlflow_evaluate(mlflow_config, agent_args, [_update_config], eval_args.record_filters)
         elif eval_args.platform == EvalsPlatform.PHOENIX:
             phoenix_config = load_phoenix_config(eval_args.evals_config_name, eval_args.extra_mixins_evals)
-            phoenix_evaluate(phoenix_config, agent_args, [_update_config])
+            phoenix_evaluate(phoenix_config, agent_args, [_update_config], eval_args.record_filters)
         else:
             raise NotImplementedError(f"Platform '{eval_args.platform.value}' is not implemented yet.")
     finally:

@@ -1,6 +1,7 @@
 """Phoenix evaluation runner."""
 
 import asyncio
+import logging
 import os
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
@@ -12,12 +13,15 @@ from evaluations.common.constants import EVALS_RUN_NAME_PREFIX
 from evaluations.common.runtime_context import build_runtime_context
 from evaluations.phoenix.configuration import PhoenixEvaluationConfig
 from evaluations.phoenix.evaluators import build_evaluators_list
+from evaluations.phoenix.record_filter import filter_dataset_examples
 from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.configuration import ApplicationConfig
 
 # The Phoenix REST API base; the UI/collector ports are documented in .env.
 PHOENIX_SERVER_URI_ENV = "PHOENIX_SERVER_URI"
+
+logger = logging.getLogger(__name__)
 
 
 async def _predict_fn_for(agent: TechMarketResearcherAgent, record_input: Mapping[str, Any]) -> str:
@@ -38,6 +42,7 @@ def phoenix_evaluate(
     config: PhoenixEvaluationConfig,
     agent_args: AgentCommandLineArguments,
     config_mutations_hooks: list[Callable[[ApplicationConfig], None]],
+    record_filters: list[str],
 ) -> None:
     """Evaluate the agent against the Phoenix dataset named by the config using its evaluators."""
     evaluators = build_evaluators_list(config)
@@ -62,6 +67,17 @@ def phoenix_evaluate(
 
         client = AsyncClient(base_url=os.environ[PHOENIX_SERVER_URI_ENV].rstrip("/"))
         dataset = await client.datasets.get_dataset(dataset=config.dataset_name)
+        if record_filters:
+            before = len(dataset.examples)
+            dataset = filter_dataset_examples(dataset, record_filters)
+            if not dataset.examples:
+                raise ValueError(f"No dataset example matches the record filter(s): {', '.join(record_filters)}.")
+            logger.info(
+                "Record filter(s) %s selected %d of %d dataset example(s).",
+                record_filters,
+                len(dataset.examples),
+                before,
+            )
         async with agent:
             await client.experiments.run_experiment(
                 dataset=dataset,

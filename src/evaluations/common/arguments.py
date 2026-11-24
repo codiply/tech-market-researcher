@@ -25,6 +25,7 @@ class EvalsCommandLineArguments(BaseCommandLineArguments):
     agent_config_name: str
     evals_config_name: str
     platform: EvalsPlatform
+    record_filters: list[str] = Field(default_factory=list)
     extra_mixins_evals: list[str] = Field(default_factory=list)
     extra_mixins_agent: list[str] = Field(default_factory=list)
 
@@ -40,8 +41,9 @@ class EvalsCommandLineArguments(BaseCommandLineArguments):
     def add_arguments(cls: type[Self], parser: ArgumentParser) -> None:
         """Register the evaluations' command-line arguments on parser."""
         parser.add_argument(
-            "--extra-mixins-evals",
+            "--extra-mixin-evals",
             "--x-mx-ev",
+            dest="extra_mixins_evals",
             action="append",
             default=[],
             help=(
@@ -50,8 +52,9 @@ class EvalsCommandLineArguments(BaseCommandLineArguments):
             ),
         )
         parser.add_argument(
-            "--extra-mixins-agent",
+            "--extra-mixin-agent",
             "--x-mx-ag",
+            dest="extra_mixins_agent",
             action="append",
             default=[],
             help=(
@@ -74,6 +77,17 @@ class EvalsCommandLineArguments(BaseCommandLineArguments):
             choices=[p.value for p in EvalsPlatform],
             default=DEFAULT_EVALS_PLATFORM.value,
             help="Evaluation platform to use.",
+        )
+        parser.add_argument(
+            "--record-filter",
+            dest="record_filters",
+            action="append",
+            default=[],
+            help=(
+                "Run only the dataset records whose unique id matches the glob pattern, e.g. "
+                "'benchmark/news/001' or 'benchmark/news/*'; can be repeated, records matching "
+                "any pattern run. Only supported by the phoenix platform."
+            ),
         )
 
     def as_agent_args(self) -> AgentCommandLineArguments:

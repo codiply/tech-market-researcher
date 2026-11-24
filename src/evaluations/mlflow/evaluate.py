@@ -3,7 +3,7 @@
 import asyncio
 import os
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 
 import mlflow
@@ -87,8 +87,11 @@ def mlflow_evaluate(
     config: MlflowEvaluationConfig,
     agent_args: AgentCommandLineArguments,
     config_mutations_hooks: list[Callable[[ApplicationConfig], None]],
+    record_filters: Sequence[str] = (),
 ) -> None:
     """Evaluate the agent against the MLflow dataset named by the config using its guidelines."""
+    if record_filters:
+        raise NotImplementedError("Record filtering is not supported by the mlflow platform.")
     _apply_harness_env(config.harness)
     mlflow.set_tracking_uri(os.environ["MLFLOW_SERVER_URI"].rstrip("/"))
     # MLflow's evaluation harness runs each record on its own short-lived event loop, but

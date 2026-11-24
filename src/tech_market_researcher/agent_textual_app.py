@@ -274,7 +274,7 @@ def main() -> None:
         f"{sys.executable} -m tech_market_researcher.agent_textual_app --config-name {shlex.quote(args.config_name)}"
     )
     for mixin in args.extra_mixins:
-        command += f" --extra-mixins {shlex.quote(mixin)}"
+        command += f" --extra-mixin {shlex.quote(mixin)}"
     # Bind all interfaces so the app is reachable over the Tailscale mesh; when a Tailscale
     # host name is configured, advertise it as the public URL so browsers on the mesh build
     # their websocket/static URLs against the right host.

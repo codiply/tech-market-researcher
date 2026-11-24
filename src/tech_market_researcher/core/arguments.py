@@ -39,10 +39,11 @@ class ExtraMixinsCommandLineArguments(BaseCommandLineArguments):
 
     @classmethod
     def add_arguments(cls: type[Self], parser: ArgumentParser) -> None:
-        """Register the --extra-mixins argument on parser."""
+        """Register the --extra-mixin argument on parser."""
         parser.add_argument(
-            "--extra-mixins",
+            "--extra-mixin",
             "--x-mx",
+            dest="extra_mixins",
             action="append",
             default=[],
             help="Mixin from the mixins folder applied on top of the loaded config; can be repeated, in order.",

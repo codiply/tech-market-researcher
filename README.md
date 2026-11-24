@@ -41,7 +41,7 @@ The Chroma Admin UI is stateless: its setup page (shown until you save settings,
 uv run agent_cli
 ```
 
-Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--extra-mixins` (alias `--x-mx`; mixin from `config/agent/mixins/` applied on top of the loaded config, repeatable in order, e.g. `--x-mx bedrock-nova-lite`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
+Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--extra-mixin` (alias `--x-mx`; mixin from `config/agent/mixins/` applied on top of the loaded config, repeatable in order, e.g. `--x-mx bedrock-nova-lite`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
 
 ### Gradio App
 
@@ -49,7 +49,7 @@ Starts an interactive chat REPL against the MLflow AI Gateway configured in `.en
 uv run agent_gradio_app
 ```
 
-Starts a [Gradio](https://gradio.app) chat web UI for the agent on port `8899`, listening on `0.0.0.0`, so it is reachable at `http://localhost:8899`. The flags are `--config-name` and `--extra-mixins` (alias `--x-mx`; same semantics as the CLI); user id, session id and time zone are fixed to their defaults.
+Starts a [Gradio](https://gradio.app) chat web UI for the agent on port `8899`, listening on `0.0.0.0`, so it is reachable at `http://localhost:8899`. The flags are `--config-name` and `--extra-mixin` (alias `--x-mx`; same semantics as the CLI); user id, session id and time zone are fixed to their defaults.
 
 ### Textual App
 
@@ -57,15 +57,25 @@ Starts a [Gradio](https://gradio.app) chat web UI for the agent on port `8899`, 
 uv run agent_textual_app
 ```
 
-Starts a [Textual](https://github.com/Textualize/textual) chat web UI for the agent on port `8898`, served to a browser by [textual-serve](https://pypi.org/project/textual-serve/); each browser connection runs its own app instance. It listens on `0.0.0.0`, so it is reachable at `http://localhost:8898`; when `TAILSCALE_HOST_NAME` is set in `.env` it also advertises that host as its public URL, so devices on the Tailscale mesh can reach it. The flags are `--config-name` and `--extra-mixins` (alias `--x-mx`; same semantics as the CLI); user id, session id and time zone are selected in the UI.
+Starts a [Textual](https://github.com/Textualize/textual) chat web UI for the agent on port `8898`, served to a browser by [textual-serve](https://pypi.org/project/textual-serve/); each browser connection runs its own app instance. It listens on `0.0.0.0`, so it is reachable at `http://localhost:8898`; when `TAILSCALE_HOST_NAME` is set in `.env` it also advertises that host as its public URL, so devices on the Tailscale mesh can reach it. The flags are `--config-name` and `--extra-mixin` (alias `--x-mx`; same semantics as the CLI); user id, session id and time zone are selected in the UI.
 
 ## Run the evaluations
 
 ```bash
 uv run evals
 ```
+Runs the agent against an evaluation dataset; each record is scored by the configured evaluators — LLM judges served through the AI Gateway, plus platform-specific code evaluators (e.g. exact match and regex checks on Phoenix). The platform is selected with `--platform`: with `mlflow` (default) the results are stored as MLflow evaluation runs under the dataset's experiment, and with `phoenix` they are stored as a Phoenix experiment attached to the dataset. Requires the docker compose stack to be running and the dataset to have been bootstrapped. After each run, the evals code deletes the vector-store collections the agent created during the run, so the evals database stays clean between runs.
 
-Runs the agent against an evaluation dataset; each record is scored by the configured evaluators — LLM judges served through the AI Gateway, plus platform-specific code evaluators (e.g. exact match and regex checks on Phoenix). The platform is selected with `--platform` (`mlflow`, default, or `phoenix`): with `mlflow` the results are stored as MLflow evaluation runs under the dataset's experiment, and with `phoenix` they are stored as a Phoenix experiment attached to the dataset. Flags: `--agent-config-name` (name of the agent config to load, default `base`), `--evals-config-name` (name of the evaluation config under `config/evaluations/<platform>/`, default `main`), `--platform` (`mlflow` or `phoenix`, default `mlflow`), `--extra-mixins-evals` (alias `--x-mx-ev`; mixin from `config/evaluations/<platform>/mixins/` applied on top of the evals config) and `--extra-mixins-agent` (alias `--x-mx-ag`; mixin from `config/agent/mixins/` applied on top of the agent config) — both repeatable in order, e.g. `uv run evals --x-mx-ev bedrock-nova-lite --x-mx-ag bedrock-nova-lite`. Requires the docker compose stack to be running and the dataset to have been bootstrapped. After each run, the evals code deletes the vector-store collections the agent created during the run, so the evals database stays clean between runs.
+Flags:
+
+- `--agent-config-name` — name of the agent config to load, its file `<name>.yaml` will be read (default `base`)
+- `--evals-config-name` — name of the evaluations config to load from `config/evaluations/<platform>/` (default `main`)
+- `--platform` — `mlflow` (default) or `phoenix`
+- `--record-filter` — repeatable glob pattern matched against the records' unique ids, e.g. `benchmark/news/001` or `benchmark/news/*`; runs only the matching records. Currently supported by the `phoenix` platform only
+- `--extra-mixin-evals` (alias `--x-mx-ev`) — mixin from `config/evaluations/<platform>/mixins/` applied on top of the evals config
+- `--extra-mixin-agent` (alias `--x-mx-ag`) — mixin from `config/agent/mixins/` applied on top of the agent config
+
+Both extra-mixin flags are repeatable and applied in order, e.g. `uv run evals --x-mx-ev bedrock-nova-lite --x-mx-ag bedrock-nova-lite`.
 
 ## Common commands
 
