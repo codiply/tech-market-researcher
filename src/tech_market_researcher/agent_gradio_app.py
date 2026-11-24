@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from typing import Any
+from uuid import uuid4
 
 from dotenv import load_dotenv
 
@@ -17,7 +18,7 @@ from langchain_core.messages import BaseMessage
 from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
 from tech_market_researcher.core.arguments import AgentCommandLineArguments, get_args
 from tech_market_researcher.core.common import AgentRuntimeContext, BasePydanticModel
-from tech_market_researcher.core.constants import DEFAULT_SESSION_ID, DEFAULT_TIME_ZONE, DEFAULT_USER_ID
+from tech_market_researcher.core.constants import DEFAULT_TIME_ZONE, DEFAULT_USER_ID
 
 # pylint: enable=wrong-import-position
 
@@ -71,6 +72,7 @@ theme = gr.themes.Default(
 
 
 def _build_ui(
+    session_id: str,
     respond: Callable[[str], Awaitable[tuple[list[dict[str, str]], str, dict[str, Any]]]],
     update_submit_button: Callable[[str], dict[str, Any]],
     apply_context: Callable[[str, str, str], Awaitable[list[dict[str, str]]]],
@@ -82,7 +84,7 @@ def _build_ui(
 
         with gr.Row():
             user_id_box = gr.Textbox(label="User ID", value=DEFAULT_USER_ID)
-            session_id_box = gr.Textbox(label="Session ID", value=DEFAULT_SESSION_ID)
+            session_id_box = gr.Textbox(label="Session ID", value=session_id)
             time_zone_box = gr.Textbox(label="Time zone", value=DEFAULT_TIME_ZONE)
             apply_btn = gr.Button("Apply", variant="secondary", elem_classes=["apply-btn"])
 
@@ -111,7 +113,9 @@ def _build_ui(
 def main() -> None:
     """Build and launch the web UI."""
     args = get_args(AgentCommandLineArguments)
-    context = ChatBotContext(user_id=DEFAULT_USER_ID, session_id=DEFAULT_SESSION_ID, time_zone=DEFAULT_TIME_ZONE)
+    # A random session per server start, like the CLI: each conversation starts in a new thread.
+    session_id = str(uuid4())
+    context = ChatBotContext(user_id=DEFAULT_USER_ID, session_id=session_id, time_zone=DEFAULT_TIME_ZONE)
     agent: TechMarketResearcherAgent | None = None
 
     async def _get_agent() -> TechMarketResearcherAgent:
@@ -161,7 +165,7 @@ def main() -> None:
         result = await agent.ainvoke([{"role": "user", "content": message}], context=agent_runtime)
         return _to_chat_items(result["messages"]), "", gr.update(interactive=False)
 
-    demo = _build_ui(respond, update_submit_button, apply_context, load_chatbot)
+    demo = _build_ui(session_id, respond, update_submit_button, apply_context, load_chatbot)
 
     demo.queue().launch(
         server_name="0.0.0.0",

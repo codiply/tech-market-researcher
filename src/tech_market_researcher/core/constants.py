@@ -39,7 +39,6 @@ ARCHIVE_RENDERED_CONFIGS_ENV_VAR = "ARCHIVE_RENDERED_CONFIGS"
 DEFAULT_CONFIG_NAME = "dev"
 
 DEFAULT_USER_ID = "codiply"
-DEFAULT_SESSION_ID = "session-0001"
 DEFAULT_TIME_ZONE = "Europe/Madrid"
 
 # Postgres identifiers are capped at 63 bytes, and schema names are interpolated

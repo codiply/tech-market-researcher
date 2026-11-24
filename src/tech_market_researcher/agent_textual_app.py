@@ -5,6 +5,7 @@ import shlex
 import sys
 import threading
 from typing import Any, Coroutine
+from uuid import uuid4
 
 from dotenv import load_dotenv
 
@@ -27,11 +28,7 @@ from textual_serve.server import Server, to_int
 from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
 from tech_market_researcher.core.arguments import AgentCommandLineArguments, get_args
 from tech_market_researcher.core.common import AgentRuntimeContext, BasePydanticModel
-from tech_market_researcher.core.constants import (
-    DEFAULT_SESSION_ID,
-    DEFAULT_TIME_ZONE,
-    DEFAULT_USER_ID,
-)
+from tech_market_researcher.core.constants import DEFAULT_TIME_ZONE, DEFAULT_USER_ID
 from tech_market_researcher.core.environment import TAILSCALE_HOST_NAME
 
 # pylint: enable=wrong-import-position
@@ -146,8 +143,10 @@ class ChatApp(App):
         # agent is built per session, from the loaded config, when the app mounts.
         self._args = get_args(AgentCommandLineArguments)
         self._agent: TechMarketResearcherAgent | None = None
+        # A random session per app instance, like the CLI: each conversation starts in a new thread.
+        self._default_session_id = str(uuid4())
         self._chat_context = ChatBotContext(
-            user_id=DEFAULT_USER_ID, session_id=DEFAULT_SESSION_ID, time_zone=DEFAULT_TIME_ZONE
+            user_id=DEFAULT_USER_ID, session_id=self._default_session_id, time_zone=DEFAULT_TIME_ZONE
         )
         self._busy = False
         # One event loop for the life of the app, owned by a dedicated thread: the agent's
@@ -171,7 +170,7 @@ class ChatApp(App):
         yield Header()
         with Horizontal(id="session-row"):
             yield Input(value=DEFAULT_USER_ID, id="user-id")
-            yield Input(value=DEFAULT_SESSION_ID, id="session-id")
+            yield Input(value=self._default_session_id, id="session-id")
             yield Input(value=DEFAULT_TIME_ZONE, id="time-zone")
             yield Button("Apply", id="apply")
         yield OptionList(id="messages")
