@@ -1,4 +1,4 @@
 judge_model_name: ec2.Qwen3.8-27B-NVFP4-QAD
 harness:
   max_concurrent: 10
-  task_timeout: 600
+  task_timeout_seconds: 600

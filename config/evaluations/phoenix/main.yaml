@@ -31,4 +31,4 @@ evaluators:
   user_friction:
     enabled: true
 harness:
-  task_timeout: 600
+  task_timeout_seconds: 600

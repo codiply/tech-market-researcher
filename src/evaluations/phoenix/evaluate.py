@@ -49,8 +49,8 @@ def phoenix_evaluate(
     extra: dict[str, Any] = {}
     if config.harness.max_concurrent:
         extra["concurrency"] = config.harness.max_concurrent
-    if config.harness.task_timeout:
-        extra["timeout"] = config.harness.task_timeout
+    if config.harness.task_timeout_seconds:
+        extra["timeout"] = config.harness.task_timeout_seconds
 
     async def run() -> None:
         # The checkpointer binds to the loop it is built on, so build the agent on the same loop.
