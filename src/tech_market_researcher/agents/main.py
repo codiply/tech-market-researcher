@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Callable, Sequence
+from datetime import datetime, timezone
 from typing import Any
 
 from deepagents import create_deep_agent
@@ -9,14 +10,24 @@ from deepagents.backends import FilesystemBackend
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
 from tech_market_researcher.capabilities.builders import build_middleware_list, build_tool_list
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.checkpointing import get_checkpointer
-from tech_market_researcher.core.common import AgentRuntimeContext, AsyncReleasableResource
+from tech_market_researcher.core.common import (
+    AgentRuntimeContext,
+    AsyncReleasableResource,
+    SessionId,
+    UserSession,
+)
 from tech_market_researcher.core.configuration import ApplicationConfig, load_config
-from tech_market_researcher.core.constants import AGENT_BACKEND_MAX_FILE_SIZE_MB
+from tech_market_researcher.core.constants import (
+    AGENT_BACKEND_MAX_FILE_SIZE_MB,
+    AGENT_CHECKPOINT_THREAD_ID_KEY,
+    AGENT_CHECKPOINT_USER_ID_METADATA_KEY,
+)
 from tech_market_researcher.core.logging_setup import setup_agent_logging
 from tech_market_researcher.core.observability import agent_trace_context, setup_observability
 from tech_market_researcher.core.tool_definitions_dump import dump_agent_tool_definitions
@@ -47,7 +58,11 @@ class TechMarketResearcherAgent:
         Prior conversation is resumed from the checkpointer under the context's thread id,
         so messages should only contain the new turns.
         """
-        config: RunnableConfig = {"configurable": {"thread_id": context.thread_id}}
+        # The user id is stored in the checkpoint metadata so sessions can later be listed per user.
+        config: RunnableConfig = {
+            "configurable": {AGENT_CHECKPOINT_THREAD_ID_KEY: context.thread_id},
+            "metadata": {AGENT_CHECKPOINT_USER_ID_METADATA_KEY: context.user_id},
+        }
         # The AgentRuntimeContext constructor always generates a session id, so it is never None here.
         assert context.session_id is not None
         with agent_trace_context(context.session_id, self._environment):
@@ -70,11 +85,35 @@ class TechMarketResearcherAgent:
 
     async def get_messages(self, context: AgentRuntimeContext) -> list[BaseMessage]:
         """Return the stored messages for the conversation under the context's thread id, if any."""
-        config: RunnableConfig = {"configurable": {"thread_id": context.thread_id}}
+        config: RunnableConfig = {"configurable": {AGENT_CHECKPOINT_THREAD_ID_KEY: context.thread_id}}
         state = await self._agent.aget_state(config)
         messages = state.values.get("messages", [])
         logger.debug("Replaying %d stored message(s) for thread=%s", len(messages), context.thread_id)
         return messages
+
+    async def alist_user_sessions(self, context: AgentRuntimeContext) -> list[UserSession]:
+        """Return the sessions stored for the context's user.
+
+        Sessions are matched on the user id tagged into the checkpoint metadata by ainvoke, so
+        other users' sessions are never visible.
+        """
+        # create_agent always builds the agent with a checkpointer, and get_messages relies on it.
+        assert isinstance(self._agent.checkpointer, BaseCheckpointSaver)
+        prefix = f"{context.user_id}:"
+        first_unseen = datetime.min.replace(tzinfo=timezone.utc)
+        last_activity: dict[SessionId, datetime] = {}
+        metadata_filter: dict[str, Any] = {AGENT_CHECKPOINT_USER_ID_METADATA_KEY: context.user_id}
+        async for checkpoint_tuple in self._agent.checkpointer.alist(None, filter=metadata_filter):
+            thread_id = checkpoint_tuple.config["configurable"][AGENT_CHECKPOINT_THREAD_ID_KEY]
+            session_id: SessionId = thread_id[len(prefix) :]
+            created_at = datetime.fromisoformat(checkpoint_tuple.checkpoint["ts"])
+            if created_at > last_activity.get(session_id, first_unseen):
+                last_activity[session_id] = created_at
+        sessions = [
+            UserSession(session_id=session_id, last_activity_at=ts) for session_id, ts in sorted(last_activity.items())
+        ]
+        logger.debug("Listed %d session(s) for user=%s", len(sessions), context.user_id)
+        return sessions
 
 
 def _apply_config_mutations(

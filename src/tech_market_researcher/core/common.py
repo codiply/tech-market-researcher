@@ -1,5 +1,6 @@
 """Shared models and helpers used across the package."""
 
+from datetime import datetime
 from typing import Any, Protocol
 from uuid import uuid4
 
@@ -24,6 +25,17 @@ class BasePydanticModel(BaseModel):
     """Base for all pydantic models; unknown fields are rejected."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+type SessionId = str
+
+
+class UserSession(BasePydanticModel):
+    """A stored agent session owned by a single user."""
+
+    session_id: str = Field(pattern=SESSION_ID_PATTERN)
+    # Time of the session's most recent checkpoint, timezone-aware UTC.
+    last_activity_at: datetime
 
 
 class AgentRuntimeContext(BaseModel):
