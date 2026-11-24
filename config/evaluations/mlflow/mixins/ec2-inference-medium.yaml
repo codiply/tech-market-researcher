@@ -1,5 +1,5 @@
 judge_model_name: ec2.Qwen3.8-27B-NVFP4-QAD
 harness:
-  max_workers: 10
+  max_workers: 3
   max_scorer_workers: 10
   max_retries: 3

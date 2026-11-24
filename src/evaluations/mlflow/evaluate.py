@@ -52,8 +52,8 @@ def _apply_harness_env(harness: HarnessConfig) -> None:
     values = {
         "MLFLOW_GENAI_EVAL_MAX_WORKERS": harness.max_workers,
         "MLFLOW_GENAI_EVAL_MAX_SCORER_WORKERS": harness.max_scorer_workers,
-        "MLFLOW_GENAI_EVAL_PREDICT_RATE_LIMIT": harness.predict_rate_limit,
-        "MLFLOW_GENAI_EVAL_SCORER_RATE_LIMIT": harness.scorer_rate_limit,
+        "MLFLOW_GENAI_EVAL_PREDICT_RATE_LIMIT": harness.predict_rate_limit_per_second,
+        "MLFLOW_GENAI_EVAL_SCORER_RATE_LIMIT": harness.scorer_rate_limit_per_second,
         "MLFLOW_GENAI_EVAL_MAX_RETRIES": harness.max_retries,
     }
     for name, value in values.items():

@@ -91,9 +91,9 @@ class HarnessConfig(BasePydanticModel):
     # Max concurrent scorers per record.
     max_scorer_workers: int | None = None
     # Max agent invocations per second; 0 disables rate limiting.
-    predict_rate_limit: int | float | None = None
+    predict_rate_limit_per_second: int | float | None = None
     # Max scorer (judge) calls per second; 0 disables. Default is predict_rate x num_scorers.
-    scorer_rate_limit: int | float | None = None
+    scorer_rate_limit_per_second: int | float | None = None
     # Retries on 429 errors for both predict_fn and scorer calls; 0 disables.
     max_retries: int | None = None
 

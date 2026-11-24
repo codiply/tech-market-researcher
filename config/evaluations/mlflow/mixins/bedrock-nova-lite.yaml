@@ -2,4 +2,6 @@ judge_model_name: bedrock.eu.amazon.nova-2-lite-v1
 harness:
   max_workers: 10
   max_scorer_workers: 10
+  predict_rate_limit_per_second: 3
+  scorer_rate_limit_per_second: 3
   max_retries: 3
