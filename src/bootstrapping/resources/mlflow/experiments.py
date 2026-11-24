@@ -13,9 +13,6 @@ from bootstrapping.datasets.mlflow import MlflowDatasetRecord, record_input_hash
 
 logger = logging.getLogger(__name__)
 
-# Sentinel distinguishing "no local record with this input hash" from local expectations of None.
-_MISSING = object()
-
 
 def _ensure_experiment(client: mlflow.MlflowClient, name: str) -> str:
     """Return the experiment id, creating the experiment if it does not exist."""
@@ -43,6 +40,11 @@ def _expected_expectations(record: MlflowDatasetRecord) -> dict | None:
     return record.expectations.model_dump(exclude_none=True) if record.expectations else None
 
 
+def _stored_unique_id(record: mlflow.entities.dataset_record.DatasetRecord) -> str | None:
+    """The unique_id tag stored on the record, if any."""
+    return (record.tags or {}).get("unique_id")
+
+
 def _ensure_dataset(
     client: mlflow.MlflowClient, experiment_id: str, dataset_config: MlflowDatasetConfig, dump_rendered: bool
 ) -> None:
@@ -50,9 +52,9 @@ def _ensure_dataset(
 
     Records are upserted by the server (keyed on the inputs hash), so re-runs do not
     create duplicates. Records no longer present in the folders are pruned, and records
-    whose stored expectations differ from the folders are re-inserted with a new record
-    id (the server merge can only add expectation keys, never remove them). Both pruning
-    and re-insertion break any run/evaluation links to those record ids.
+    whose stored expectations or unique_id tag differ from the folders are re-inserted
+    with a new record id (the server merge can only add keys, never remove them). Both
+    pruning and re-insertion break any run/evaluation links to those record ids.
     """
     loaded = load_filtered_datasets(dataset_config.local_directories, dataset_config.filters, dump_rendered)
     records = [to_mlflow_record(r) for r in loaded]
@@ -64,12 +66,18 @@ def _ensure_dataset(
         )
     else:
         logger.info("Dataset '%s' already exists - reusing.", dataset_config.dataset_name)
-    local = {record.input_hash(): _expected_expectations(record) for record in records}
-    stale_ids = [
-        r.dataset_record_id
-        for r in dataset.records
-        if local.get(record_input_hash(r.inputs), _MISSING) != r.expectations
-    ]
+    local = {
+        record.input_hash(): (_expected_expectations(record), (record.tags or {})["unique_id"]) for record in records
+    }
+    stale_ids = []
+    for r in dataset.records:
+        expected = local.get(record_input_hash(r.inputs))
+        if expected is None:
+            stale_ids.append(r.dataset_record_id)
+            continue
+        expectations, unique_id = expected
+        if r.expectations != expectations or _stored_unique_id(r) != unique_id:
+            stale_ids.append(r.dataset_record_id)
     if stale_ids:
         deleted = dataset.delete_records(stale_ids)
         logger.info(

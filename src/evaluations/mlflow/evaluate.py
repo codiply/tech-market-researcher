@@ -1,6 +1,8 @@
 """MLflow evaluation runner."""
 
 import asyncio
+import fnmatch
+import logging
 import os
 import threading
 from collections.abc import Callable, Sequence
@@ -16,6 +18,8 @@ from evaluations.mlflow.scorers import build_scorers_list
 from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.configuration import ApplicationConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _find_dataset(client: mlflow.MlflowClient, experiment_id: str, name: str):
@@ -58,7 +62,10 @@ def _apply_harness_env(harness: HarnessConfig) -> None:
 
 
 def _run_mlflow_harness(
-    config: MlflowEvaluationConfig, agent: TechMarketResearcherAgent, agent_loop: asyncio.AbstractEventLoop
+    config: MlflowEvaluationConfig,
+    agent: TechMarketResearcherAgent,
+    agent_loop: asyncio.AbstractEventLoop,
+    record_filters: Sequence[str] = (),
 ) -> None:
     """Run the MLflow evaluation harness against the dataset named by the config."""
     # The run is started on this thread: MLflow's active run is thread-local, and
@@ -66,10 +73,25 @@ def _run_mlflow_harness(
     with mlflow.start_run(run_name=_run_name()):
         experiment = mlflow.set_experiment(config.experiment_name)
         dataset = _find_dataset(mlflow.MlflowClient(), experiment.experiment_id, config.dataset_name)
+        records = dataset.records
+        if record_filters:
+            before = len(records)
+            records = [
+                record
+                for record in records
+                if (unique_id := (record.tags or {}).get("unique_id"))
+                and any(fnmatch.fnmatch(unique_id, pattern) for pattern in record_filters)
+            ]
+            if not records:
+                raise ValueError(f"No dataset record matches the record filter(s): {', '.join(record_filters)}.")
+            logger.info(
+                "Record filter(s) %s selected %d of %d dataset record(s).",
+                record_filters,
+                len(records),
+                before,
+            )
         data = [
-            {"inputs": record.inputs, "expectations": record.expectations}
-            for record in dataset.records
-            if record.expectations
+            {"inputs": record.inputs, "expectations": record.expectations} for record in records if record.expectations
         ]
 
         def predict_fn(messages: list[dict[str, str]], context: dict[str, str]) -> str:
@@ -90,8 +112,6 @@ def mlflow_evaluate(
     record_filters: Sequence[str] = (),
 ) -> None:
     """Evaluate the agent against the MLflow dataset named by the config using its guidelines."""
-    if record_filters:
-        raise NotImplementedError("Record filtering is not supported by the mlflow platform.")
     _apply_harness_env(config.harness)
     mlflow.set_tracking_uri(os.environ["MLFLOW_SERVER_URI"].rstrip("/"))
     # MLflow's evaluation harness runs each record on its own short-lived event loop, but
@@ -112,7 +132,7 @@ def mlflow_evaluate(
             # The harness blocks, so run it in a worker thread to keep the agent loop
             # free to service the agent calls the harness dispatches to it. The loop is
             # passed so those calls are dispatched to the same loop the agent was created on.
-            await asyncio.to_thread(_run_mlflow_harness, config, agent, agent_loop)
+            await asyncio.to_thread(_run_mlflow_harness, config, agent, agent_loop, record_filters)
 
     asyncio.run_coroutine_threadsafe(_evaluate(), agent_loop).result()
     # Stop the dedicated agent loop, which otherwise keeps running in its daemon thread;

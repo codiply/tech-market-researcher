@@ -86,7 +86,7 @@ class EvalsCommandLineArguments(BaseCommandLineArguments):
             help=(
                 "Run only the dataset records whose unique id matches the glob pattern, e.g. "
                 "'benchmark/news/001' or 'benchmark/news/*'; can be repeated, records matching "
-                "any pattern run. Only supported by the phoenix platform."
+                "any pattern run."
             ),
         )
 

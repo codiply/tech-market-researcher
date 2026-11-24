@@ -71,7 +71,7 @@ Flags:
 - `--agent-config-name` — name of the agent config to load, its file `<name>.yaml` will be read (default `base`)
 - `--evals-config-name` — name of the evaluations config to load from `config/evaluations/<platform>/` (default `main`)
 - `--platform` — `mlflow` (default) or `phoenix`
-- `--record-filter` — repeatable glob pattern matched against the records' unique ids, e.g. `benchmark/news/001` or `benchmark/news/*`; runs only the matching records. Currently supported by the `phoenix` platform only
+- `--record-filter` — repeatable glob pattern matched against the records' unique ids, e.g. `benchmark/news/001` or `benchmark/news/*`; runs only the matching records
 - `--extra-mixin-evals` (alias `--x-mx-ev`) — mixin from `config/evaluations/<platform>/mixins/` applied on top of the evals config
 - `--extra-mixin-agent` (alias `--x-mx-ag`) — mixin from `config/agent/mixins/` applied on top of the agent config
 

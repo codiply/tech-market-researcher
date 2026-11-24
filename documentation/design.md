@@ -144,7 +144,7 @@ Evaluation flow, step by step:
 - **Datasets** — stored in the git repo as the source of truth.
 - **Jinja logic** — dataset records can use Jinja templating to render prompts before they are sent to the agent.
 - **Loader** — a loader script applies filtering to the dataset and loads the records into MLflow (as a dataset) and Phoenix. It can load multiple datasets and merge them into a single MLflow or Phoenix dataset.
-- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow or Phoenix depending on the selected platform. On the Phoenix platform, a run can be restricted to a subset of the dataset's records, selected by their unique ids, so individual records can be debugged without running the whole dataset.
+- **Evals script** — runs the agent over the evaluation dataset, loading it from MLflow or Phoenix depending on the selected platform. A run can be restricted to a subset of the dataset's records, selected by their unique ids, so individual records can be debugged without running the whole dataset.
 
 ### Scorer applicability (MLflow)
 

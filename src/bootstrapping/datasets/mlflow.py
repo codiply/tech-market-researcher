@@ -58,8 +58,13 @@ def to_mlflow_record(record: DatasetRecord) -> MlflowDatasetRecord:
         )
         else None
     )
+    # The unique_id tag is the key the evaluations' record filtering matches on. MLflow
+    # deduplicates records by the hash of their inputs, so it is only unambiguous while
+    # every local record has distinct inputs.
+    tags = dict(record.tags or {})
+    tags["unique_id"] = record.unique_id
     return MlflowDatasetRecord(
         inputs=record.input.model_dump(),
         expectations=expectations,
-        tags=record.tags or None,
+        tags=tags,
     )
