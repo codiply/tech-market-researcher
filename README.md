@@ -1,6 +1,6 @@
 # Tech Market Researcher
 
-> **Built with the [Pi](https://pi.dev/) agent harness** and a [Jundot/Qwen3.8-27B-oQ4e-mtp](https://huggingface.co/Jundot/Qwen3.8-27B-oQ4e-mtp) model (Qwen 3.8, 27B parameters), running locally on an M5 Pro MacBook via [OMLX](https://omlx.ai/). Development was heavily human-steered, with direction given commit by commit.
+> **Built with the [Pi](https://pi.dev/) agent harness** and the [Jundot/Qwen3.8-27B-oQ4e-mtp](https://huggingface.co/Jundot/Qwen3.8-27B-oQ4e-mtp) model (Qwen 3.8, 27B parameters), running locally on an M5 Pro MacBook via [OMLX](https://omlx.ai/). Development was heavily human-steered, with direction given commit by commit.
 
 ## Design
 
