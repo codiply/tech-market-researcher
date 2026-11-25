@@ -7,7 +7,12 @@ import pytest
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoaderParams, deep_merge
+from tech_market_researcher.core.config_loader import (
+    ConfigLoader,
+    ConfigLoaderParams,
+    ListMergeBehaviour,
+    deep_merge,
+)
 
 
 @pytest.mark.parametrize(
@@ -35,7 +40,40 @@ from tech_market_researcher.core.config_loader import ConfigLoader, ConfigLoader
 )
 def test_deep_merge(configs: list[dict], expected: dict) -> None:
     """Deep-merge combines configs in order, with later entries winning."""
-    assert deep_merge(configs) == expected
+    assert deep_merge(configs, ListMergeBehaviour.OVERWRITE) == expected
+
+
+@pytest.mark.parametrize(
+    ("configs", "expected"),
+    [
+        pytest.param([], {}, id="no configs"),
+        pytest.param([{"a": 1}], {"a": 1}, id="single config"),
+        pytest.param([{"a": [1, 2]}, {"a": [3]}], {"a": [1, 2, 3]}, id="lists are extended"),
+        pytest.param([{"a": [1, 2]}, {"a": []}], {"a": [1, 2]}, id="empty list appends nothing"),
+        pytest.param([{"a": []}, {"a": [1]}], {"a": [1]}, id="items appended to empty list"),
+        pytest.param(
+            [{"a": [1]}, {"a": [2]}, {"a": [3]}],
+            {"a": [1, 2, 3]},
+            id="three layers extend in order",
+        ),
+        pytest.param(
+            [{"nested": {"a": [1, 2]}}, {"nested": {"a": [3]}}],
+            {"nested": {"a": [1, 2, 3]}},
+            id="lists inside nested dicts are extended",
+        ),
+        pytest.param([{"a": [1, 2]}, {"a": 3}], {"a": 3}, id="list replaced by scalar"),
+        pytest.param([{"a": 1}, {"a": [2]}], {"a": [2]}, id="scalar replaced by list"),
+        pytest.param([{"a": 1}, {"a": 2}], {"a": 2}, id="later scalar still wins"),
+        pytest.param(
+            [{"a": {"x": 1}}, {"a": {"y": 2}}],
+            {"a": {"x": 1, "y": 2}},
+            id="dicts still merge",
+        ),
+    ],
+)
+def test_deep_merge_extend(configs: list[dict], expected: dict) -> None:
+    """Deep-merge with EXTEND appends later list items onto earlier ones; all other values still use the later entry."""
+    assert deep_merge(configs, ListMergeBehaviour.EXTEND) == expected
 
 
 class SampleConfig(BaseModel):
@@ -156,6 +194,19 @@ SCENARIOS: dict[str, Scenario] = {
             "2_configs_with_mixins/dev.yaml": {"tags": ["c"]},
             "3_merged/dev.yaml": {"tags": ["c"]},
             "4_final/dev.yaml": {"tags": ["c"]},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
+    "lists_extended": Scenario(
+        expected={"tags": ["a", "b", "c"]},
+        params=ConfigLoaderParams(list_merge_behaviour=ListMergeBehaviour.EXTEND),
+        expected_dump={
+            "1_raw/_common.yaml": {"tags": ["a", "b"]},
+            "1_raw/dev.yaml": {"tags": ["c"]},
+            "2_configs_with_mixins/_common.yaml": {"tags": ["a", "b"]},
+            "2_configs_with_mixins/dev.yaml": {"tags": ["c"]},
+            "3_merged/dev.yaml": {"tags": ["a", "b", "c"]},
+            "4_final/dev.yaml": {"tags": ["a", "b", "c"]},
             "extra_mixins_list.yaml": [],
         },
     ),

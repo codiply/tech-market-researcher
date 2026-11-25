@@ -6,6 +6,7 @@ import tempfile
 import threading
 import zipfile
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Generic, Self, TypeVar
 
@@ -28,9 +29,19 @@ FINAL_FOLDER = "4_final"
 EXTRA_MIXINS_LIST_FILENAME = "extra_mixins_list.yaml"
 
 
+class ListMergeBehaviour(str, Enum):
+    """How list fields are combined when merging config layers."""
+
+    OVERWRITE = "overwrite"
+    EXTEND = "extend"
+
+
 class ConfigLoaderParams(BaseModel):
     """Optional behavior settings for ConfigLoader."""
 
+    # How list fields are combined when merging config layers: overwrite replaces the value,
+    # extend appends the later layer's items to the earlier layer's items.
+    list_merge_behaviour: ListMergeBehaviour = ListMergeBehaviour.OVERWRITE
     common_config_name: str = "_common"
     # The config loaded when load() is called without an explicit config name.
     default_config_name: str = "default"
@@ -68,13 +79,23 @@ class ConfigLoaderParams(BaseModel):
         return self
 
 
-def deep_merge(configs: list[dict[str, Any]]) -> dict[str, Any]:
-    """Deep-merge configs in order, with later entries winning over earlier ones. Arrays are overwritten, not merged."""
+def deep_merge(configs: list[dict[str, Any]], list_merge_behaviour: ListMergeBehaviour) -> dict[str, Any]:
+    """Deep-merge configs in order, with later entries winning over earlier ones.
+
+    List fields are combined according to list_merge_behaviour: OVERWRITE replaces the earlier
+    value, EXTEND appends the later layer's items to the earlier layer's items.
+    """
     merged: dict[str, Any] = {}
     for config in configs:
         for key, value in config.items():
             if isinstance(value, dict) and isinstance(merged.get(key), dict):
-                merged[key] = deep_merge([merged[key], value])
+                merged[key] = deep_merge([merged[key], value], list_merge_behaviour)
+            elif (
+                isinstance(value, list)
+                and isinstance(merged.get(key), list)
+                and list_merge_behaviour is ListMergeBehaviour.EXTEND
+            ):
+                merged[key] = merged[key] + value
             else:
                 merged[key] = value
     return merged
@@ -119,7 +140,7 @@ class ConfigLoader(Generic[ConfigT]):
         self._debug_copy_file_if_needed(debug_dir, f"{RAW_FOLDER}/{path.name}", path)
         config = self._read_yaml(path)
         mixins = [self._read_mixin(mixin_name, debug_dir) for mixin_name in config.pop(self._params.mixins_field, [])]
-        rendered = deep_merge([config, *mixins])
+        rendered = deep_merge([config, *mixins], self._params.list_merge_behaviour)
         self._debug_dump_yaml_if_needed(debug_dir, f"{CONFIGS_WITH_MIXINS_FOLDER}/{path.name}", rendered)
         return rendered
 
@@ -303,10 +324,10 @@ class ConfigLoader(Generic[ConfigT]):
         # Apply the extra mixins programmatically, on top of everything else
         extra_mixins_loaded = self._load_extra_mixins(extra_mixins, debug_dir)
 
-        merged = deep_merge(configs)
+        merged = deep_merge(configs, self._params.list_merge_behaviour)
         self._dump_merged_config_if_needed(config_name, merged, MERGED_FOLDER, debug_dir)
 
-        merged_with_extra = deep_merge([merged, *extra_mixins_loaded])
+        merged_with_extra = deep_merge([merged, *extra_mixins_loaded], self._params.list_merge_behaviour)
         self._dump_merged_config_if_needed(config_name, merged_with_extra, FINAL_FOLDER, debug_dir)
 
         return self._model_class.model_validate(merged_with_extra)
