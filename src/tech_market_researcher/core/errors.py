@@ -3,3 +3,7 @@
 
 class BaseTechMarketResearcherError(RuntimeError):
     """Base class for every custom error of the Tech Market Researcher."""
+
+
+class SkillsDebugDumpError(BaseTechMarketResearcherError):
+    """Raised when dumping the available-skills section to the debug folder fails."""

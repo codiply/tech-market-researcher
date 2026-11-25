@@ -18,6 +18,8 @@ DEBUG_CONFIG_ARCHIVE_MAX_COUNT = 1000
 DEBUG_AGENT_FOLDER = "agent"
 DEBUG_TOOL_DEFINITIONS_FOLDER = "tool-definitions"
 TOOL_DEFINITIONS_FILE_NAME = "tool-definitions.json"
+DEBUG_SKILLS_FOLDER = "skills"
+SKILLS_FILE_NAME = "skills.md"
 
 # On-disk directory the agent's filesystem tools are rooted at (virtual mode).
 AGENT_BACKEND_ROOT_DIR = Path(".storage/agent/backend")

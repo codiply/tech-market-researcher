@@ -287,10 +287,17 @@ class ToolDefinitionsDebugConfig(BasePydanticModel):
     enabled: bool = False
 
 
+class SkillsDebugConfig(BasePydanticModel):
+    """Skills dump settings. Omit the section (or set enabled: false) to disable."""
+
+    enabled: bool = False
+
+
 class DebugConfig(BasePydanticModel):
     """Debug dumps written under the .debug folder. Omit the section to disable them all."""
 
     tool_definitions: ToolDefinitionsDebugConfig = Field(default_factory=ToolDefinitionsDebugConfig)
+    skills: SkillsDebugConfig = Field(default_factory=SkillsDebugConfig)
 
 
 class FilesystemBackendConfig(BasePydanticModel):

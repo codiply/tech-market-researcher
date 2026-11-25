@@ -4,3 +4,7 @@ debug:
   # .debug/agent/tool-definitions/tool-definitions.json on agent creation.
   tool_definitions:
     enabled: true
+  # Dumps the available-skills section injected into the agent's system prompt to
+  # .debug/agent/skills/skills.md on agent creation.
+  skills:
+    enabled: true

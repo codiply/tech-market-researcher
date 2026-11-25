@@ -28,10 +28,10 @@ from tech_market_researcher.core.constants import (
     AGENT_CHECKPOINT_THREAD_ID_KEY,
     AGENT_CHECKPOINT_USER_ID_METADATA_KEY,
 )
+from tech_market_researcher.core.debug_dumps import write_debug_dumps
 from tech_market_researcher.core.logging_setup import setup_agent_logging
 from tech_market_researcher.core.observability import agent_trace_context, setup_observability
 from tech_market_researcher.core.skills import materialize_skill_bundles
-from tech_market_researcher.core.tool_definitions_dump import dump_agent_tool_definitions
 
 logger = logging.getLogger(__name__)
 
@@ -174,8 +174,7 @@ async def create_agent(
         skills=skills or None,
         backend=backend,
     )
-    if config.debug.tool_definitions.enabled:
-        dump_agent_tool_definitions(agent)
+    write_debug_dumps(config.debug, agent)
     return TechMarketResearcherAgent(
         agent,
         config.environment,
