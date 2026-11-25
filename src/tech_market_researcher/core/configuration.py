@@ -32,6 +32,8 @@ from tech_market_researcher.core.environment import env_flag_is_true
 CONFIG_DIR = Path("config") / "agent"
 # Loader-specific path under the debug config folder.
 DEBUG_CONFIG_LOADER_PATH = Path("agent")
+# Skill bundle names and versions are interpolated into filesystem paths, so restrict them.
+SKILL_BUNDLE_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class ModelProviderConfig(BasePydanticModel):
@@ -183,6 +185,23 @@ class CheckpointerConfig(BasePydanticModel):
         return self
 
 
+class SkillBundleConfig(BasePydanticModel):
+    """One skill bundle under assets/skill-bundles. Set enabled: false to exclude it."""
+
+    bundle_name: str
+    version: str
+    enabled: bool = True
+
+    @model_validator(mode="after")
+    def _check_names(self) -> "SkillBundleConfig":
+        for label, value in (("bundle_name", self.bundle_name), ("version", self.version)):
+            if not SKILL_BUNDLE_COMPONENT_PATTERN.fullmatch(value):
+                raise ValueError(
+                    f"skill bundle {label} must match {SKILL_BUNDLE_COMPONENT_PATTERN.pattern}, got '{value}'."
+                )
+        return self
+
+
 class CapabilitiesConfig(BasePydanticModel):
     """Settings for the tools and middlewares available to the agent."""
 
@@ -200,7 +219,18 @@ class SupervisorConfig(BasePydanticModel):
     model: ModelConfig
     system_prompt: str
     checkpointer: CheckpointerConfig = Field(default_factory=CheckpointerConfig)
+    skill_bundles: list[SkillBundleConfig] = Field(default_factory=list)
     capabilities: CapabilitiesConfig
+
+    @model_validator(mode="after")
+    def _check_skill_bundles(self) -> "SupervisorConfig":
+        seen: set[str] = set()
+        for bundle in self.skill_bundles:
+            if bundle.bundle_name in seen:
+                msg = f"skill bundle '{bundle.bundle_name}' is defined more than once"
+                raise ValueError(msg)
+            seen.add(bundle.bundle_name)
+        return self
 
 
 class MlflowObservabilityConfig(BasePydanticModel):

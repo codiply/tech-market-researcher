@@ -30,6 +30,7 @@ from tech_market_researcher.core.constants import (
 )
 from tech_market_researcher.core.logging_setup import setup_agent_logging
 from tech_market_researcher.core.observability import agent_trace_context, setup_observability
+from tech_market_researcher.core.skills import materialize_skill_bundles
 from tech_market_researcher.core.tool_definitions_dump import dump_agent_tool_definitions
 
 logger = logging.getLogger(__name__)
@@ -157,6 +158,12 @@ async def create_agent(
     capabilities = config.supervisor.capabilities
     checkpointer_wrapper = await get_checkpointer(config.supervisor.checkpointer)
     checkpointer = checkpointer_wrapper.checkpointer
+    backend = FilesystemBackend(
+        root_dir=config.filesystem_backend.root_dir,
+        virtual_mode=True,
+        max_file_size_mb=AGENT_BACKEND_MAX_FILE_SIZE_MB,
+    )
+    skills = materialize_skill_bundles(backend, config.supervisor.skill_bundles)
     agent = create_deep_agent(
         model=model,
         system_prompt=config.supervisor.system_prompt,
@@ -164,11 +171,8 @@ async def create_agent(
         middleware=build_middleware_list(capabilities),
         context_schema=AgentRuntimeContext,
         checkpointer=checkpointer,
-        backend=FilesystemBackend(
-            root_dir=config.filesystem_backend.root_dir,
-            virtual_mode=True,
-            max_file_size_mb=AGENT_BACKEND_MAX_FILE_SIZE_MB,
-        ),
+        skills=skills or None,
+        backend=backend,
     )
     if config.debug.tool_definitions.enabled:
         dump_agent_tool_definitions(agent)

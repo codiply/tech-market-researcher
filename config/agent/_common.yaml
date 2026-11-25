@@ -28,6 +28,11 @@ supervisor:
       db_user: agent
       db_password_env_var_name: AGENT_DB_PASSWORD
       schema_name: checkpoints
+  # List order is the load order for the agent; the agent fails at startup if two enabled bundles
+  # define the same skill name.
+  skill_bundles:
+    - bundle_name: hacker_news
+      version: v1
   capabilities:
     runtime_context_debugger:
       enabled: true

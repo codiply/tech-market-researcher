@@ -7,8 +7,11 @@ DEFAULT_EVALS_CONFIG_NAME = "main"
 
 EVALS_USER_ID = "evals"
 EVALS_ENVIRONMENT = "evals"
-# Name of the agent config mixin applied when running evals, from config/agent/mixins/.
+# Names of the agent config mixins applied when running evals, from config/agent/mixins/. The
+# shared evals mixin is always applied; the platform mixin adds the platform's own backend.
 EVALS_AGENT_MIXIN = "evals"
+EVALS_MLFLOW_AGENT_MIXIN = "evals-mlflow"
+EVALS_PHOENIX_AGENT_MIXIN = "evals-phoenix"
 EVALS_SESSION_ID_PREFIX = "eval-"
 EVALS_RUN_NAME_PREFIX = "evals-"
 

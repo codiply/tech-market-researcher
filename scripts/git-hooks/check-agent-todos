@@ -2,6 +2,10 @@
 # Fail if any AGENT_TODO: or AGENTS_TODO: markers remain in the codebase.
 # Markers are instructions for the agent (see the action-agent-todos skill); commit
 # only after actioning them.
+if ! command -v rg >/dev/null 2>&1; then
+    echo "check-agent-todos: ripgrep (rg) not found on PATH" >&2
+    exit 1
+fi
 rg -n "AGENT(S)?_TODO:" --no-ignore --hidden \
     -g '!.venv' -g '!.git' -g '!.mypy_cache' -g '!.pytest_cache' \
     -g '!.agents/skills/action-agent-todos' -g '!scripts/git-hooks/check-agent-todos' -g '!.pre-commit-config.yaml'

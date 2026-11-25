@@ -30,6 +30,10 @@ AGENT_DEFAULT_LOG_ROTATION_MAX_SIZE_MB = 10.0
 AGENT_LOG_FILE_NAME = "agent.log"
 # Maximum size of a single file the agent can read, in megabytes.
 AGENT_BACKEND_MAX_FILE_SIZE_MB = 10
+# On-disk directory holding skill bundles, laid out as <bundle>/<version>/<skill>.
+SKILL_BUNDLES_DIR = Path("assets") / "skill-bundles"
+# Directory under the agent's backend root where enabled skill bundles are materialized.
+SKILLS_BACKEND_DIR = "skills"
 
 # Env var enabling the dump of rendered configs under BASE_DEBUG_DIR_PATH (True/true/1).
 DEBUG_DUMP_RENDERED_CONFIGS_ENV_VAR = "DEBUG_DUMP_RENDERED_CONFIGS"
