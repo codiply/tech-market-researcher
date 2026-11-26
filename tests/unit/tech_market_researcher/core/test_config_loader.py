@@ -152,6 +152,30 @@ def test_deep_merge_extend(configs: list[dict], expected: dict) -> None:
             {"a": [1, 2, 3]},
             id="three layers extend in order",
         ),
+        pytest.param(
+            [{"a": 1}, {"b": 2}, {"a": MergeDirective(None, MergeOperation.DELETE)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"b": 2},
+            id="delete removes the key",
+        ),
+        pytest.param(
+            [{"a": MergeDirective(None, MergeOperation.DELETE)}],
+            ListMergeBehaviour.OVERWRITE,
+            {},
+            id="delete of a missing key is a no-op",
+        ),
+        pytest.param(
+            [{"a": {"x": 1, "y": 2}}, {"a": MergeDirective(None, MergeOperation.DELETE)}],
+            ListMergeBehaviour.EXTEND,
+            {},
+            id="delete removes a whole section under extend behaviour",
+        ),
+        pytest.param(
+            [{"nested": {"a": 1, "b": 2}}, {"nested": {"b": MergeDirective(None, MergeOperation.DELETE)}}],
+            ListMergeBehaviour.OVERWRITE,
+            {"nested": {"a": 1}},
+            id="delete of a nested key",
+        ),
     ],
 )
 def test_deep_merge_directives(configs: list[dict], behaviour: ListMergeBehaviour, expected: dict) -> None:
@@ -341,6 +365,30 @@ SCENARIOS: dict[str, Scenario] = {
             "0_mixins/tags_mix.yaml": {"tags": MergeDirective(["y"], MergeOperation.EXTEND)},
             "3_merged/dev.yaml": {"tags": ["x", "y"]},
             "4_final/dev.yaml": {"tags": ["x", "y"]},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
+    "delete_tag": Scenario(
+        expected={"search": {"provider": "alpha"}},
+        expected_dump={
+            "1_raw/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
+            "1_raw/dev.yaml": {"search": {"timeout": MergeDirective(None, MergeOperation.DELETE)}},
+            "2_configs_with_mixins/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
+            "2_configs_with_mixins/dev.yaml": {"search": {"timeout": None}},
+            "3_merged/dev.yaml": {"search": {"provider": "alpha"}},
+            "4_final/dev.yaml": {"search": {"provider": "alpha"}},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
+    "delete_section": Scenario(
+        expected={},
+        expected_dump={
+            "1_raw/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
+            "1_raw/dev.yaml": {"search": MergeDirective(None, MergeOperation.DELETE)},
+            "2_configs_with_mixins/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
+            "2_configs_with_mixins/dev.yaml": {},
+            "3_merged/dev.yaml": {},
+            "4_final/dev.yaml": {},
             "extra_mixins_list.yaml": [],
         },
     ),

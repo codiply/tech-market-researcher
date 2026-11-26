@@ -41,14 +41,15 @@ class MergeOperation(str, Enum):
 
     OVERWRITE = "overwrite"
     EXTEND = "extend"
+    DELETE = "delete"
 
 
 class MergeDirective:
-    """A config value wrapped by a merge directive YAML tag (``!overwrite`` or ``!extend``).
+    """A config value wrapped by a merge directive YAML tag (``!overwrite``, ``!extend`` or ``!delete``).
 
     The directive only affects how the value is combined with the previous config layer in
-    deep_merge, overriding the loader's list merge behaviour for that node; it is unwrapped to its
-    plain value before validation, so it never reaches the model.
+    deep_merge, overriding the loader's list merge behaviour for that node (a !delete directive
+    removes the key entirely); it is unwrapped or dropped before validation, so it never reaches the model.
     """
 
     __slots__ = ("value", "operation")
@@ -93,17 +94,27 @@ def _construct_extend(loader: yaml.SafeLoader, node: yaml.Node) -> MergeDirectiv
     return _construct_merge_directive(loader, node, MergeOperation.EXTEND)
 
 
+def _construct_delete(
+    loader: yaml.SafeLoader,  # pylint: disable=unused-argument
+    node: yaml.Node,  # pylint: disable=unused-argument
+) -> MergeDirective:
+    """Construct a !delete sentinel; the tagged value (usually absent) is ignored."""
+    return MergeDirective(None, MergeOperation.DELETE)
+
+
 class ConfigSafeLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
-    """yaml.SafeLoader that additionally understands the !overwrite and !extend merge directive tags.
+    """yaml.SafeLoader that additionally understands the !overwrite, !extend and !delete merge directive tags.
 
     !overwrite forces the value to replace the existing value at merge time (instead of merging dicts
-    or extending lists); !extend forces the value's list items to be appended to the existing list.
-    Both override the loader's configured list merge behaviour for the tagged node only.
+    or extending lists); !extend forces the value's list items to be appended to the existing list;
+    !delete removes the key from the merged result entirely. Both !overwrite and !extend override the
+    loader's configured list merge behaviour for the tagged node only.
     """
 
 
 ConfigSafeLoader.add_constructor("!" + MergeOperation.OVERWRITE.value, _construct_overwrite)
 ConfigSafeLoader.add_constructor("!" + MergeOperation.EXTEND.value, _construct_extend)
+ConfigSafeLoader.add_constructor("!" + MergeOperation.DELETE.value, _construct_delete)
 
 
 def _represent_merge_directive(dumper: yaml.SafeDumper, directive: MergeDirective) -> yaml.Node:
@@ -174,13 +185,17 @@ def deep_merge(configs: list[dict[str, Any]], list_merge_behaviour: ListMergeBeh
     List fields are combined according to list_merge_behaviour: OVERWRITE replaces the earlier
     value, EXTEND appends the later layer's items to the earlier layer's items. A value wrapped in
     a MergeDirective forces its own behaviour for that node, overriding list_merge_behaviour; a
-    !extend directive whose earlier value is not a list sets the value, i.e. extends an empty list.
+    !extend directive whose earlier value is not a list sets the value, i.e. extends an empty list;
+    a !delete directive removes the key from the merged result, whether or not an earlier layer set it.
     """
     merged: dict[str, Any] = {}
     for config in configs:
         for key, value in config.items():
             existing = merged.get(key)
             if isinstance(value, MergeDirective):
+                if value.operation is MergeOperation.DELETE:
+                    merged.pop(key, None)
+                    continue
                 if (
                     value.operation is MergeOperation.EXTEND
                     and isinstance(existing, list)
@@ -223,8 +238,8 @@ class ConfigLoader(Generic[ConfigT]):
     def _read_yaml(self, path: Path) -> dict[str, Any]:
         """Read a YAML config file. An empty file (e.g. fully commented out) is treated as an empty config.
 
-        Parsed with ConfigSafeLoader, which additionally understands the !overwrite / !extend merge
-        directive tags.
+        Parsed with ConfigSafeLoader, which additionally understands the !overwrite / !extend /
+        !delete merge directive tags.
         """
         data = yaml.load(path.read_text(), Loader=ConfigSafeLoader)
         if data is None:
