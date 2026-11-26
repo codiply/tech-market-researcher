@@ -92,24 +92,28 @@ def validate_skill_bundles(skill_bundles: list[SkillBundleConfig]) -> None:
 
 
 def materialize_skill_bundles(backend: BackendProtocol, skill_bundles: list[SkillBundleConfig]) -> list[str]:
-    """Upload each enabled skill bundle to the agent's backend, under skills/<bundle>/<version>.
+    """Upload each enabled skill bundle to the agent's backend, under skills/<skill name>.
 
     The deep agent reads skills only from the backend, so the bundles are written there through
     the backend's upload API, which works for any backend (not just an on-disk one). The entire
     skills directory is reset first, so files removed from the repo (or added manually in the
-    backend) do not linger. Returns the skill source paths, relative to the backend's root.
+    backend) do not linger. Skills are flattened into the backend without their bundle name or
+    version, relying on the skill name uniqueness check done during validation.
+    Returns the skill source directory the deep agent should read skills from; it lists the
+    skill subdirectories of every source path it is given, so the whole flattened directory is
+    passed as a single source.
     """
     validate_skill_bundles(skill_bundles)
     delete_backend_path(backend, f"/{SKILLS_BACKEND_DIR}")
-    skill_paths: list[str] = []
+    any_enabled = False
     for bundle in skill_bundles:
         if not bundle.enabled:
             logger.info("Skipping skill bundle %s (disabled)", bundle.bundle_name)
             continue
+        any_enabled = True
         source_dir = _bundle_source_dir(bundle)
-        prefix = f"{SKILLS_BACKEND_DIR}/{bundle.bundle_name}/{bundle.version}"
         files = [
-            (f"{prefix}/{path.relative_to(source_dir).as_posix()}", path.read_bytes())
+            (f"{SKILLS_BACKEND_DIR}/{path.relative_to(source_dir).as_posix()}", path.read_bytes())
             for path in sorted(source_dir.rglob("*"))
             if path.is_file()
         ]
@@ -118,6 +122,7 @@ def materialize_skill_bundles(backend: BackendProtocol, skill_bundles: list[Skil
         if failed:
             msg = f"failed to upload skill files for bundle '{bundle.bundle_name}': {failed}"
             raise ValueError(msg)
-        skill_paths.append(prefix)
         logger.info("Materialized skill bundle %s@%s from %s", bundle.bundle_name, bundle.version, source_dir)
-    return skill_paths
+    if not any_enabled:
+        return []
+    return [SKILLS_BACKEND_DIR]

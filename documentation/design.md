@@ -286,7 +286,7 @@ A mixin is a plain YAML fragment in the mixins folder of the config it applies t
 
 ## Skill bundles
 
-The agent loads [Agent Skills](https://agentskills.io/specification) from bundles stored in the repo under `assets/skill-bundles/`, laid out as `<bundle name>/<bundle version>/<skill name>/`. Each enabled bundle declared in the agent config is materialized into the agent's backend at agent startup, under `skills/<bundle>/<version>/` of the backend's root: the deep agent reads skills only from the backend, and its skill paths are sandboxed to the backend's root, so they cannot point into the repo. Bundles are written through the backend's upload API, so this works for any backend, not just the on-disk one. The agent fails at startup if a bundle's version directory is missing, if a skill's frontmatter is invalid, or if two enabled bundles define the same skill name.
+The agent loads [Agent Skills](https://agentskills.io/specification) from bundles stored in the repo under `assets/skill-bundles/`, laid out as `<bundle name>/<bundle version>/<skill name>/`. Each enabled bundle declared in the agent config is materialized into the agent's backend at agent startup, flattened to `skills/<skill name>/` of the backend's root (skill names are unique across enabled bundles, so the bundle name and version are omitted): the deep agent reads skills only from the backend, and its skill paths are sandboxed to the backend's root, so they cannot point into the repo. Bundles are written through the backend's upload API, so this works for any backend, not just the on-disk one. The agent fails at startup if a bundle's version directory is missing, if a skill's frontmatter is invalid, or if two enabled bundles define the same skill name.
 
 ## Developer Setup
 
