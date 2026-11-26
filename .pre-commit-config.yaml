@@ -43,6 +43,13 @@ repos:
         types: [python]
         require_serial: true
 
+      - id: check_yaml_syntax
+        name: check yaml syntax
+        description: "Check YAML syntax (custom tags allowed; parses without constructing)"
+        entry: .venv/bin/python scripts/git-hooks/check-yaml-syntax
+        language: system
+        types: [yaml]
+
       - id: cfn-lint
         name: cfn-lint
         description: "Lint CloudFormation templates"
@@ -79,11 +86,6 @@ repos:
         description: "Ensure files end with a single newline"
       - id: trailing-whitespace
         description: "Strip trailing whitespace"
-      - id: check-yaml
-        description: "Check YAML syntax"
-        # CloudFormation templates use short-form intrinsic tags (!Equals,
-        # !If, !Sub, ...), which plain yaml.safe_load cannot parse.
-        exclude: ^assets/infrastructure/cloudformation/
       - id: check-json
         description: "Check JSON syntax"
       - id: check-toml

@@ -265,7 +265,16 @@ flowchart LR
     merge --> validated
 ```
 
-- **Deep merge** — dicts are merged recursively; scalars and arrays are replaced, never concatenated, so a later layer fully overrides a key.
+- **Deep merge** — dicts are merged recursively; scalars are replaced, so a later layer fully overrides a key. How lists are combined depends on the `list_merge_behaviour` constructor param: the default `overwrite` replaces the earlier list, while `extend` appends the later layer's items to the earlier layer's list.
+- **Merge directive tags** — a tag on a value forces how that node is merged, overriding the loader's default behaviour.
+
+  | | Default behaviour | `!overwrite` | `!extend` |
+  | --- | --- | --- | --- |
+  | Dicts | Merged recursively, always. | Replaces the whole section instead of merging. | No effect — merging is already the default. |
+  | Lists | Set by the `list_merge_behaviour` constructor param: `overwrite` (default) or `extend`. | Replaces the list. | Appends the items to the earlier layer's list. |
+
+  Tags are stripped during merging and never reach the validated model.
+- **Extend fallback** — `!extend` extends the earlier layer's list at that key. When the earlier layers hold no list there (missing key or non-list value), the value is simply set, which is the same as extending an empty list.
 - **Mixins** — any of the three file layers may declare a `_mixins` list; each entry references `mixins/<name>.yaml`, which is merged on top of the layer that declares it (in declaration order). Mixins let shared fragments be reused across configs and local overrides; the `_mixins` field itself is dropped before validation and is not recursed into. The `mixins/` folder is committed like the rest of the configs.
 - **Validation** — the merged result is validated into a pydantic model (`ApplicationConfig` for the agent) with `extra="forbid"`, so a typo'd key in any YAML file fails at load time. `ConfigLoader.validate_all_configs()` loads every named config (without local overrides) so committed configs are checked by the unit tests and pre-commit.
 - **Local overrides** — files named `X.local.yaml` are the mechanism for per-machine changes (e.g. pointing `dev` at a different local model) without touching committed files.

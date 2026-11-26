@@ -1,0 +1,4 @@
+search: !overwrite
+  provider: beta
+  retries:
+    - 1

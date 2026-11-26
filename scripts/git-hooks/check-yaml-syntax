@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+# Hyphenated filename follows git/pre-commit hook naming convention, which pylint's snake_case rule would
+# otherwise flag.
+# pylint: disable=invalid-name
+"""Check YAML syntax of the given files.
+
+Parses (composes) without constructing, so unknown custom tags (e.g. !overwrite / !extend
+merge directives, CloudFormation intrinsic tags) are allowed; only malformed YAML fails.
+"""
+
+import sys
+
+import yaml
+
+
+def main() -> None:
+    """Entry point."""
+    status = 0
+    for path in sys.argv[1:]:
+        try:
+            with open(path, encoding="utf-8") as f:
+                list(yaml.compose_all(f.read()))
+        except yaml.YAMLError as e:
+            print(f"{path}: {e}")
+            status = 1
+    sys.exit(status)
+
+
+if __name__ == "__main__":
+    main()

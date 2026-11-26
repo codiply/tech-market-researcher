@@ -10,7 +10,10 @@ from pydantic import BaseModel, ConfigDict
 from tech_market_researcher.core.config_loader import (
     ConfigLoader,
     ConfigLoaderParams,
+    ConfigSafeLoader,
     ListMergeBehaviour,
+    MergeDirective,
+    MergeOperation,
     deep_merge,
 )
 
@@ -74,6 +77,86 @@ def test_deep_merge(configs: list[dict], expected: dict) -> None:
 def test_deep_merge_extend(configs: list[dict], expected: dict) -> None:
     """Deep-merge with EXTEND appends later list items onto earlier ones; all other values still use the later entry."""
     assert deep_merge(configs, ListMergeBehaviour.EXTEND) == expected
+
+
+@pytest.mark.parametrize(
+    ("configs", "behaviour", "expected"),
+    [
+        pytest.param(
+            [{"a": {"x": 1, "y": 2}}, {"a": MergeDirective({"y": 3}, MergeOperation.OVERWRITE)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"y": 3}},
+            id="dict overwrite replaces whole section",
+        ),
+        pytest.param(
+            [{"a": {"x": 1}}, {"a": MergeDirective({"y": 2}, MergeOperation.OVERWRITE)}],
+            ListMergeBehaviour.EXTEND,
+            {"a": {"y": 2}},
+            id="dict overwrite still replaces section under extend behaviour",
+        ),
+        pytest.param(
+            [{"a": {"x": 1}}, {"a": MergeDirective({"y": 2}, MergeOperation.EXTEND)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"x": 1, "y": 2}},
+            id="extend on a dict falls back to merging",
+        ),
+        pytest.param(
+            [{"a": [1, 2]}, {"a": MergeDirective([3], MergeOperation.EXTEND)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": [1, 2, 3]},
+            id="list extend appends under overwrite behaviour",
+        ),
+        pytest.param(
+            [{"a": [1, 2]}, {"a": MergeDirective([3], MergeOperation.OVERWRITE)}],
+            ListMergeBehaviour.EXTEND,
+            {"a": [3]},
+            id="list overwrite replaces under extend behaviour",
+        ),
+        pytest.param(
+            [{"a": MergeDirective([3], MergeOperation.EXTEND)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": [3]},
+            id="extend with no earlier list sets the value",
+        ),
+        pytest.param(
+            [{"a": 1}, {"a": MergeDirective([3], MergeOperation.EXTEND)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": [3]},
+            id="extend over a non-list earlier value sets the value",
+        ),
+        pytest.param(
+            [{"a": [1]}, {"a": MergeDirective(3, MergeOperation.EXTEND)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": 3},
+            id="extend with a non-list value replaces",
+        ),
+        pytest.param(
+            [{"a": 1}, {"a": MergeDirective(2, MergeOperation.OVERWRITE)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": 2},
+            id="scalar overwrite",
+        ),
+        pytest.param(
+            [{"nested": {"a": [1, 2]}}, {"nested": {"a": MergeDirective([3], MergeOperation.EXTEND)}}],
+            ListMergeBehaviour.OVERWRITE,
+            {"nested": {"a": [1, 2, 3]}},
+            id="lists inside nested dicts extend via tag",
+        ),
+        pytest.param(
+            [
+                {"a": [1]},
+                {"a": MergeDirective([2], MergeOperation.EXTEND)},
+                {"a": MergeDirective([3], MergeOperation.EXTEND)},
+            ],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": [1, 2, 3]},
+            id="three layers extend in order",
+        ),
+    ],
+)
+def test_deep_merge_directives(configs: list[dict], behaviour: ListMergeBehaviour, expected: dict) -> None:
+    """Merge directive tags force per-node merge behaviour, overriding the loader's list behaviour."""
+    assert deep_merge(configs, behaviour) == expected
 
 
 class SampleConfig(BaseModel):
@@ -211,6 +294,56 @@ SCENARIOS: dict[str, Scenario] = {
         },
     ),
     "missing_named_config": Scenario(error=FileNotFoundError),
+    "dict_section_overwrite": Scenario(
+        expected={"search": {"provider": "beta", "retries": [1]}},
+        expected_dump={
+            "1_raw/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
+            "1_raw/dev.yaml": {
+                "search": MergeDirective({"provider": "beta", "retries": [1]}, MergeOperation.OVERWRITE)
+            },
+            "2_configs_with_mixins/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
+            "2_configs_with_mixins/dev.yaml": {"search": {"provider": "beta", "retries": [1]}},
+            "3_merged/dev.yaml": {"search": {"provider": "beta", "retries": [1]}},
+            "4_final/dev.yaml": {"search": {"provider": "beta", "retries": [1]}},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
+    "list_extend_tag": Scenario(
+        expected={"tags": ["a", "b", "c"]},
+        expected_dump={
+            "1_raw/_common.yaml": {"tags": ["a", "b"]},
+            "1_raw/dev.yaml": {"tags": MergeDirective(["c"], MergeOperation.EXTEND)},
+            "2_configs_with_mixins/_common.yaml": {"tags": ["a", "b"]},
+            "2_configs_with_mixins/dev.yaml": {"tags": ["c"]},
+            "3_merged/dev.yaml": {"tags": ["a", "b", "c"]},
+            "4_final/dev.yaml": {"tags": ["a", "b", "c"]},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
+    "list_overwrite_tag": Scenario(
+        expected={"tags": ["c"]},
+        params=ConfigLoaderParams(list_merge_behaviour=ListMergeBehaviour.EXTEND),
+        expected_dump={
+            "1_raw/_common.yaml": {"tags": ["a", "b"]},
+            "1_raw/dev.yaml": {"tags": MergeDirective(["c"], MergeOperation.OVERWRITE)},
+            "2_configs_with_mixins/_common.yaml": {"tags": ["a", "b"]},
+            "2_configs_with_mixins/dev.yaml": {"tags": ["c"]},
+            "3_merged/dev.yaml": {"tags": ["c"]},
+            "4_final/dev.yaml": {"tags": ["c"]},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
+    "mixin_list_extend": Scenario(
+        expected={"tags": ["x", "y"]},
+        expected_dump={
+            "1_raw/dev.yaml": {"tags": ["x"], "_mixins": ["tags_mix"]},
+            "2_configs_with_mixins/dev.yaml": {"tags": ["x", "y"]},
+            "0_mixins/tags_mix.yaml": {"tags": MergeDirective(["y"], MergeOperation.EXTEND)},
+            "3_merged/dev.yaml": {"tags": ["x", "y"]},
+            "4_final/dev.yaml": {"tags": ["x", "y"]},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
     "mixins_all_levels": Scenario(
         expected={"app": "local-app", "search": {"provider": "gamma", "timeout": 30}},
         config_name="prd",
@@ -327,7 +460,7 @@ def test_debug_dump(tmp_path: Path, folder: str) -> None:
     assert loader.load(scenario.config_name, extra_mixins=scenario.extra_mixins).model_dump() == scenario.expected
     debug_dir = tmp_path / "debug"
     dumped = {
-        p.relative_to(tmp_path / "debug").as_posix(): yaml.safe_load(p.read_text())
+        p.relative_to(tmp_path / "debug").as_posix(): yaml.load(p.read_text(), Loader=ConfigSafeLoader)
         for p in debug_dir.rglob("*")
         if p.suffix in (".yaml", ".yml")
     }

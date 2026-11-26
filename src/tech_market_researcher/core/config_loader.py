@@ -36,6 +36,95 @@ class ListMergeBehaviour(str, Enum):
     EXTEND = "extend"
 
 
+class MergeOperation(str, Enum):
+    """Per-node merge behaviour forced by a merge directive YAML tag."""
+
+    OVERWRITE = "overwrite"
+    EXTEND = "extend"
+
+
+class MergeDirective:
+    """A config value wrapped by a merge directive YAML tag (``!overwrite`` or ``!extend``).
+
+    The directive only affects how the value is combined with the previous config layer in
+    deep_merge, overriding the loader's list merge behaviour for that node; it is unwrapped to its
+    plain value before validation, so it never reaches the model.
+    """
+
+    __slots__ = ("value", "operation")
+
+    def __init__(self, value: Any, operation: MergeOperation) -> None:
+        self.value = value
+        self.operation = operation
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, MergeDirective) and self.value == other.value and self.operation == other.operation
+
+    def __repr__(self) -> str:
+        return f"MergeDirective({self.operation.value!r}, {self.value!r})"
+
+
+# Module-level resolver used to determine the underlying type of scalars wrapped in a merge directive tag.
+_scalar_resolver = yaml.resolver.Resolver()
+
+
+def _construct_merge_directive(loader: yaml.SafeLoader, node: yaml.Node, operation: MergeOperation) -> MergeDirective:
+    if isinstance(node, yaml.MappingNode):
+        loader.flatten_mapping(node)
+        value: Any = loader.construct_mapping(node)
+    elif isinstance(node, yaml.SequenceNode):
+        value = loader.construct_sequence(node)
+    elif isinstance(node, yaml.ScalarNode):
+        # implicit is PyYAML's (plain, non_plain) resolver-allowance tuple: a plain (unquoted) scalar may
+        # use plain-implicit resolvers (int, bool, float, ...), while a quoted scalar always resolves as a string.
+        implicit = (True, False) if node.style is None else (False, False)
+        tag = _scalar_resolver.resolve(yaml.ScalarNode, node.value, implicit)
+        value = loader.yaml_constructors[tag](loader, node)
+    else:
+        raise ValueError(f"Cannot apply a merge directive tag to {type(node).__name__} node.")
+    return MergeDirective(value, operation)
+
+
+def _construct_overwrite(loader: yaml.SafeLoader, node: yaml.Node) -> MergeDirective:
+    return _construct_merge_directive(loader, node, MergeOperation.OVERWRITE)
+
+
+def _construct_extend(loader: yaml.SafeLoader, node: yaml.Node) -> MergeDirective:
+    return _construct_merge_directive(loader, node, MergeOperation.EXTEND)
+
+
+class ConfigSafeLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
+    """yaml.SafeLoader that additionally understands the !overwrite and !extend merge directive tags.
+
+    !overwrite forces the value to replace the existing value at merge time (instead of merging dicts
+    or extending lists); !extend forces the value's list items to be appended to the existing list.
+    Both override the loader's configured list merge behaviour for the tagged node only.
+    """
+
+
+ConfigSafeLoader.add_constructor("!" + MergeOperation.OVERWRITE.value, _construct_overwrite)
+ConfigSafeLoader.add_constructor("!" + MergeOperation.EXTEND.value, _construct_extend)
+
+
+def _represent_merge_directive(dumper: yaml.SafeDumper, directive: MergeDirective) -> yaml.Node:
+    """Render a MergeDirective as its plain wrapped value, so debug dumps stay plain YAML."""
+    return dumper.represent_data(directive.value)
+
+
+yaml.SafeDumper.add_representer(MergeDirective, _represent_merge_directive)
+
+
+def _unwrap_merge_directives(value: Any) -> Any:
+    """Recursively replace MergeDirective values with their wrapped values, so none reach the model."""
+    if isinstance(value, MergeDirective):
+        return value.value
+    if isinstance(value, dict):
+        return {key: _unwrap_merge_directives(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_unwrap_merge_directives(item) for item in value]
+    return value
+
+
 class ConfigLoaderParams(BaseModel):
     """Optional behavior settings for ConfigLoader."""
 
@@ -83,19 +172,34 @@ def deep_merge(configs: list[dict[str, Any]], list_merge_behaviour: ListMergeBeh
     """Deep-merge configs in order, with later entries winning over earlier ones.
 
     List fields are combined according to list_merge_behaviour: OVERWRITE replaces the earlier
-    value, EXTEND appends the later layer's items to the earlier layer's items.
+    value, EXTEND appends the later layer's items to the earlier layer's items. A value wrapped in
+    a MergeDirective forces its own behaviour for that node, overriding list_merge_behaviour; a
+    !extend directive whose earlier value is not a list sets the value, i.e. extends an empty list.
     """
     merged: dict[str, Any] = {}
     for config in configs:
         for key, value in config.items():
-            if isinstance(value, dict) and isinstance(merged.get(key), dict):
-                merged[key] = deep_merge([merged[key], value], list_merge_behaviour)
+            existing = merged.get(key)
+            if isinstance(value, MergeDirective):
+                if (
+                    value.operation is MergeOperation.EXTEND
+                    and isinstance(existing, list)
+                    and isinstance(value.value, list)
+                ):
+                    merged[key] = existing + value.value
+                    continue
+                if value.operation is MergeOperation.OVERWRITE:
+                    merged[key] = value.value
+                    continue
+                value = value.value  # !extend on a non-list: fall back to the default behaviour
+            if isinstance(value, dict) and isinstance(existing, dict):
+                merged[key] = deep_merge([existing, value], list_merge_behaviour)
             elif (
                 isinstance(value, list)
-                and isinstance(merged.get(key), list)
+                and isinstance(existing, list)
                 and list_merge_behaviour is ListMergeBehaviour.EXTEND
             ):
-                merged[key] = merged[key] + value
+                merged[key] = existing + value
             else:
                 merged[key] = value
     return merged
@@ -117,8 +221,12 @@ class ConfigLoader(Generic[ConfigT]):
         self._swap_lock = threading.Lock()
 
     def _read_yaml(self, path: Path) -> dict[str, Any]:
-        """Read a YAML config file. An empty file (e.g. fully commented out) is treated as an empty config."""
-        data = yaml.safe_load(path.read_text())
+        """Read a YAML config file. An empty file (e.g. fully commented out) is treated as an empty config.
+
+        Parsed with ConfigSafeLoader, which additionally understands the !overwrite / !extend merge
+        directive tags.
+        """
+        data = yaml.load(path.read_text(), Loader=ConfigSafeLoader)
         if data is None:
             return {}
         if not isinstance(data, dict):
@@ -135,14 +243,19 @@ class ConfigLoader(Generic[ConfigT]):
         mixin.pop(self._params.mixins_field, None)
         return mixin
 
-    def _load_with_mixins(self, path: Path, debug_dir: Path | None) -> dict[str, Any]:
-        """Load the config at path, deep-merged with its declared mixins in declaration order."""
+    def _load_layer(self, path: Path, debug_dir: Path | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Load the config at path and its declared mixins, dropping the mixins field.
+
+        Returns the file config and its mixins in declaration order, so the caller can apply them as
+        separate merge layers (a file's merge directive tags must resolve against the previous files,
+        not be pre-consumed within this file).
+        """
         self._debug_copy_file_if_needed(debug_dir, f"{RAW_FOLDER}/{path.name}", path)
         config = self._read_yaml(path)
         mixins = [self._read_mixin(mixin_name, debug_dir) for mixin_name in config.pop(self._params.mixins_field, [])]
         rendered = deep_merge([config, *mixins], self._params.list_merge_behaviour)
         self._debug_dump_yaml_if_needed(debug_dir, f"{CONFIGS_WITH_MIXINS_FOLDER}/{path.name}", rendered)
-        return rendered
+        return config, mixins
 
     def _load_extra_mixins(self, extra_mixins: list[str] | None, debug_dir: Path | None) -> list[dict[str, Any]]:
         """Load extra mixins from the mixins folder, in the given order, to be applied on top of everything else."""
@@ -311,16 +424,19 @@ class ConfigLoader(Generic[ConfigT]):
         # Load the common config if it exists
         common_path = self._base_path / f"{self._params.common_config_name}.{ext}"
         if common_path.exists():
-            configs.append(self._load_with_mixins(common_path, debug_dir))
+            config, mixins = self._load_layer(common_path, debug_dir)
+            configs.extend([config, *mixins])
         # Load the config named when calling this method
         named_path = self._base_path / f"{config_name}.{ext}"
         if not named_path.exists():
             raise FileNotFoundError(f"Config file not found: {named_path}")
-        configs.append(self._load_with_mixins(named_path, debug_dir))
+        config, mixins = self._load_layer(named_path, debug_dir)
+        configs.extend([config, *mixins])
         # Load the local override config if it exists
         local_path = self._base_path / f"{config_name}.{self._params.local_override_filename_infix}.{ext}"
         if include_local_overrides and local_path.exists():
-            configs.append(self._load_with_mixins(local_path, debug_dir))
+            config, mixins = self._load_layer(local_path, debug_dir)
+            configs.extend([config, *mixins])
         # Apply the extra mixins programmatically, on top of everything else
         extra_mixins_loaded = self._load_extra_mixins(extra_mixins, debug_dir)
 
@@ -330,4 +446,4 @@ class ConfigLoader(Generic[ConfigT]):
         merged_with_extra = deep_merge([merged, *extra_mixins_loaded], self._params.list_merge_behaviour)
         self._dump_merged_config_if_needed(config_name, merged_with_extra, FINAL_FOLDER, debug_dir)
 
-        return self._model_class.model_validate(merged_with_extra)
+        return self._model_class.model_validate(_unwrap_merge_directives(merged_with_extra))
