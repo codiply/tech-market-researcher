@@ -42,14 +42,18 @@ class MergeOperation(str, Enum):
     OVERWRITE = "overwrite"
     EXTEND = "extend"
     DELETE = "delete"
+    OVERRIDE_IF_PRESENT = "override-if-present"
 
 
 class MergeDirective:
-    """A config value wrapped by a merge directive YAML tag (``!overwrite``, ``!extend`` or ``!delete``).
+    """A config value wrapped by a merge directive YAML tag
+    (``!overwrite``, ``!extend``, ``!delete`` or ``!override-if-present``).
 
     The directive only affects how the value is combined with the previous config layer in
     deep_merge, overriding the loader's list merge behaviour for that node (a !delete directive
-    removes the key entirely); it is unwrapped or dropped before validation, so it never reaches the model.
+    removes the key entirely; a !override-if-present directive merges the subtree only when the
+    key is already set by a lower layer, and is skipped otherwise); it is unwrapped or dropped
+    before validation, so it never reaches the model.
     """
 
     __slots__ = ("value", "operation")
@@ -102,19 +106,33 @@ def _construct_delete(
     return MergeDirective(None, MergeOperation.DELETE)
 
 
+def _construct_override_if_present(loader: yaml.SafeLoader, node: yaml.Node) -> MergeDirective:
+    """Construct a !override-if-present directive; the tagged value must be a mapping (a subtree)."""
+    if not isinstance(node, yaml.MappingNode):
+        raise ValueError(
+            "!override-if-present can only tag a mapping (a subtree merged when the key is already present)."
+        )
+    loader.flatten_mapping(node)
+    return MergeDirective(loader.construct_mapping(node), MergeOperation.OVERRIDE_IF_PRESENT)
+
+
 class ConfigSafeLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
-    """yaml.SafeLoader that additionally understands the !overwrite, !extend and !delete merge directive tags.
+    """yaml.SafeLoader that additionally understands the !overwrite, !extend, !delete and
+    !override-if-present merge directive tags.
 
     !overwrite forces the value to replace the existing value at merge time (instead of merging dicts
     or extending lists); !extend forces the value's list items to be appended to the existing list;
-    !delete removes the key from the merged result entirely. Both !overwrite and !extend override the
-    loader's configured list merge behaviour for the tagged node only.
+    !delete removes the key from the merged result entirely; !override-if-present merges the tagged
+    subtree only when the key is already set by a lower layer, and skips it (without creating the
+    key) otherwise. !overwrite and !extend override the loader's configured list merge behaviour
+    for the tagged node only.
     """
 
 
 ConfigSafeLoader.add_constructor("!" + MergeOperation.OVERWRITE.value, _construct_overwrite)
 ConfigSafeLoader.add_constructor("!" + MergeOperation.EXTEND.value, _construct_extend)
 ConfigSafeLoader.add_constructor("!" + MergeOperation.DELETE.value, _construct_delete)
+ConfigSafeLoader.add_constructor("!" + MergeOperation.OVERRIDE_IF_PRESENT.value, _construct_override_if_present)
 
 
 def _represent_merge_directive(dumper: yaml.SafeDumper, directive: MergeDirective) -> yaml.Node:
@@ -179,6 +197,36 @@ class ConfigLoaderParams(BaseModel):
         return self
 
 
+class _DirectiveResolution(str, Enum):
+    """How a MergeDirective resolves against the previous layer in deep_merge."""
+
+    DELETE = "delete"  # remove the key from the merged result
+    SKIP = "skip"  # leave the merged result unchanged
+    SET = "set"  # store the resolved value as-is, without further merging
+    MERGE = "merge"  # merge the unwrapped value using the default rules
+
+
+def _apply_directive(existing: Any, directive: MergeDirective) -> tuple[_DirectiveResolution, Any]:
+    """Resolve a MergeDirective against the value set by an earlier layer.
+
+    An !extend directive only extends when both the earlier value and the wrapped value are
+    lists; otherwise it falls back to the default merge rules.
+    """
+    if directive.operation is MergeOperation.DELETE:
+        return _DirectiveResolution.DELETE, None
+    if (
+        directive.operation is MergeOperation.EXTEND
+        and isinstance(existing, list)
+        and isinstance(directive.value, list)
+    ):
+        return _DirectiveResolution.SET, existing + directive.value
+    if directive.operation is MergeOperation.OVERWRITE:
+        return _DirectiveResolution.SET, directive.value
+    if directive.operation is MergeOperation.OVERRIDE_IF_PRESENT and existing is None:
+        return _DirectiveResolution.SKIP, None  # key set by no earlier layer: the conditional subtree doesn't apply
+    return _DirectiveResolution.MERGE, directive.value
+
+
 def deep_merge(configs: list[dict[str, Any]], list_merge_behaviour: ListMergeBehaviour) -> dict[str, Any]:
     """Deep-merge configs in order, with later entries winning over earlier ones.
 
@@ -186,27 +234,25 @@ def deep_merge(configs: list[dict[str, Any]], list_merge_behaviour: ListMergeBeh
     value, EXTEND appends the later layer's items to the earlier layer's items. A value wrapped in
     a MergeDirective forces its own behaviour for that node, overriding list_merge_behaviour; a
     !extend directive whose earlier value is not a list sets the value, i.e. extends an empty list;
-    a !delete directive removes the key from the merged result, whether or not an earlier layer set it.
+    a !delete directive removes the key from the merged result, whether or not an earlier layer set it;
+    a !override-if-present directive merges its subtree as usual when the key is already set by an
+    earlier layer, and is skipped (without creating the key) otherwise.
     """
     merged: dict[str, Any] = {}
     for config in configs:
         for key, value in config.items():
             existing = merged.get(key)
             if isinstance(value, MergeDirective):
-                if value.operation is MergeOperation.DELETE:
+                resolution, value = _apply_directive(existing, value)
+                if resolution is _DirectiveResolution.DELETE:
                     merged.pop(key, None)
                     continue
-                if (
-                    value.operation is MergeOperation.EXTEND
-                    and isinstance(existing, list)
-                    and isinstance(value.value, list)
-                ):
-                    merged[key] = existing + value.value
+                if resolution is _DirectiveResolution.SET:
+                    merged[key] = value
                     continue
-                if value.operation is MergeOperation.OVERWRITE:
-                    merged[key] = value.value
+                if resolution is _DirectiveResolution.SKIP:
                     continue
-                value = value.value  # !extend on a non-list: fall back to the default behaviour
+                # MERGE: fall through to the default rules, as if the tag weren't there.
             if isinstance(value, dict) and isinstance(existing, dict):
                 merged[key] = deep_merge([existing, value], list_merge_behaviour)
             elif isinstance(value, dict) and existing is None:
@@ -242,7 +288,7 @@ class ConfigLoader(Generic[ConfigT]):
         """Read a YAML config file. An empty file (e.g. fully commented out) is treated as an empty config.
 
         Parsed with ConfigSafeLoader, which additionally understands the !overwrite / !extend /
-        !delete merge directive tags.
+        !delete / !override-if-present merge directive tags.
         """
         data = yaml.load(path.read_text(), Loader=ConfigSafeLoader)
         if data is None:

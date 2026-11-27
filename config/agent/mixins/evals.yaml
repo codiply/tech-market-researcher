@@ -8,8 +8,10 @@ indexing:
     created_during_evals: "true"
 supervisor:
   backend:
-    # Keep the agent's on-disk files for eval runs separate from regular agent runs.
-    filesystem:
+    # Keep the agent's on-disk files for eval runs separate from regular agent runs. The conditional
+    # tag leaves the section alone when it is set by no lower layer, e.g. with the sandbox backend,
+    # where the section must not exist.
+    filesystem: !override-if-present
       root_dir: .storage/evals/agent/backend
 logging:
   directory: .storage/evals/agent/logs

@@ -270,12 +270,12 @@ flowchart LR
 - **Deep merge** — dicts are merged recursively; scalars are replaced, so a later layer fully overrides a key. How lists are combined depends on the `list_merge_behaviour` constructor param: the default `overwrite` replaces the earlier list, while `extend` appends the later layer's items to the earlier layer's list.
 - **Merge directive tags** — a tag on a value forces how that node is merged, overriding the loader's default behaviour.
 
-  | | Default behaviour | `!overwrite` | `!extend` | `!delete` |
-  | --- | --- | --- | --- | --- |
-  | Dicts | Merged recursively, always. | Replaces the whole section instead of merging. | No effect — merging is already the default. | Removes the key entirely. |
-  | Lists | Set by the `list_merge_behaviour` constructor param: `overwrite` (default) or `extend`. | Replaces the list. | Appends the items to the earlier layer's list. | Removes the key entirely. |
+  | | Default behaviour | `!overwrite` | `!extend` | `!delete` | `!override-if-present` |
+  | --- | --- | --- | --- | --- | --- |
+  | Dicts | Merged recursively, always. | Replaces the whole section instead of merging. | No effect — merging is already the default. | Removes the key entirely. | Merges the subtree when the key was set by a lower layer; skips it without creating the key otherwise. |
+  | Lists | Set by the `list_merge_behaviour` constructor param: `overwrite` (default) or `extend`. | Replaces the list. | Appends the items to the earlier layer's list. | Removes the key entirely. | Not allowed — the tag only accepts a mapping value. |
 
-  Tags are stripped during merging and never reach the validated model. `!delete` takes no value and is written bare after the key, e.g. `timeout: !delete`; it removes the key whether or not an earlier layer set it, and also applies to nested keys inside a section.
+  Tags are stripped during merging and never reach the validated model. `!delete` takes no value and is written bare after the key, e.g. `timeout: !delete`; it removes the key whether or not an earlier layer set it, and also applies to nested keys inside a section. `!override-if-present` merges its subtree as if the tag weren't there when the key exists with a non-null value (an empty mapping counts as present, while a bare `null` counts as absent); directives nested inside the subtree resolve against the merged section as usual, and the skipped subtree drops any directives inside it.
 - **Extend fallback** — `!extend` extends the earlier layer's list at that key. When the earlier layers hold no list there (missing key or non-list value), the value is simply set, which is the same as extending an empty list.
 - **Mixins** — any of the three file layers may declare a `_mixins` list; each entry references `mixins/<name>.yaml`, which is merged on top of the layer that declares it (in declaration order). Mixins let shared fragments be reused across configs and local overrides; the `_mixins` field itself is dropped before validation and is not recursed into. The `mixins/` folder is committed like the rest of the configs.
 - **Validation** — the merged result is validated into a pydantic model (`ApplicationConfig` for the agent) with `extra="forbid"`, so a typo'd key in any YAML file fails at load time. `ConfigLoader.validate_all_configs()` loads every named config (without local overrides) so committed configs are checked by the unit tests and pre-commit.

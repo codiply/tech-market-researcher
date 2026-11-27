@@ -176,6 +176,107 @@ def test_deep_merge_extend(configs: list[dict], expected: dict) -> None:
             {"nested": {"a": 1}},
             id="delete of a nested key",
         ),
+        pytest.param(
+            [{"a": {"x": 1, "y": 2}}, {"a": MergeDirective({"y": 3, "z": 4}, MergeOperation.OVERRIDE_IF_PRESENT)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"x": 1, "y": 3, "z": 4}},
+            id="override-if-present over an existing section merges",
+        ),
+        pytest.param(
+            [{"b": 1}, {"a": MergeDirective({"x": 1}, MergeOperation.OVERRIDE_IF_PRESENT)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"b": 1},
+            id="override-if-present over a missing key is skipped",
+        ),
+        pytest.param(
+            [{"b": 1}, {"a": {"x": MergeDirective({"p": 1}, MergeOperation.OVERRIDE_IF_PRESENT)}}],
+            ListMergeBehaviour.OVERWRITE,
+            {"b": 1, "a": {}},
+            id="override-if-present in a new subtree skips the key, leaving the empty parent",
+        ),
+        pytest.param(
+            [
+                {"a": {"x": 1}},
+                {"a": MergeDirective({"y": 2}, MergeOperation.OVERRIDE_IF_PRESENT)},
+                {"a": MergeDirective({"z": 3}, MergeOperation.OVERRIDE_IF_PRESENT)},
+            ],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"x": 1, "y": 2, "z": 3}},
+            id="three layers merge into a present section in order",
+        ),
+        pytest.param(
+            [{"a": 1}, {"a": MergeDirective({"x": 2}, MergeOperation.OVERRIDE_IF_PRESENT)}],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"x": 2}},
+            id="override-if-present over a non-dict earlier value replaces",
+        ),
+        pytest.param(
+            [
+                {"a": {"x": 1, "y": 2}},
+                {
+                    "a": MergeDirective(
+                        {"y": MergeDirective(3, MergeOperation.OVERWRITE)}, MergeOperation.OVERRIDE_IF_PRESENT
+                    )
+                },
+            ],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"x": 1, "y": 3}},
+            id="inner overwrite resolves inside a present override-if-present subtree",
+        ),
+        pytest.param(
+            [
+                {"a": {"x": [1, 2]}},
+                {
+                    "a": MergeDirective(
+                        {"x": MergeDirective([3], MergeOperation.EXTEND)}, MergeOperation.OVERRIDE_IF_PRESENT
+                    )
+                },
+            ],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"x": [1, 2, 3]}},
+            id="inner extend resolves inside a present override-if-present subtree",
+        ),
+        pytest.param(
+            [
+                {"a": {"x": 1, "y": 2}},
+                {
+                    "a": MergeDirective(
+                        {"x": MergeDirective(None, MergeOperation.DELETE)}, MergeOperation.OVERRIDE_IF_PRESENT
+                    )
+                },
+            ],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"y": 2}},
+            id="inner delete resolves inside a present override-if-present subtree",
+        ),
+        pytest.param(
+            [
+                {"a": {"x": {"p": 1}}},
+                {
+                    "a": MergeDirective(
+                        {"x": MergeDirective({"p": 2}, MergeOperation.OVERRIDE_IF_PRESENT)},
+                        MergeOperation.OVERRIDE_IF_PRESENT,
+                    )
+                },
+            ],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"x": {"p": 2}}},
+            id="nested override-if-present over present keys merges",
+        ),
+        pytest.param(
+            [
+                {"a": {"x": {"p": 1}}},
+                {
+                    "a": MergeDirective(
+                        {"z": MergeDirective({"p": 1}, MergeOperation.OVERRIDE_IF_PRESENT)},
+                        MergeOperation.OVERRIDE_IF_PRESENT,
+                    )
+                },
+            ],
+            ListMergeBehaviour.OVERWRITE,
+            {"a": {"x": {"p": 1}}},
+            id="nested override-if-present skips a missing inner key",
+        ),
     ],
 )
 def test_deep_merge_directives(configs: list[dict], behaviour: ListMergeBehaviour, expected: dict) -> None:
@@ -410,6 +511,38 @@ SCENARIOS: dict[str, Scenario] = {
             "extra_mixins_list.yaml": [],
         },
     ),
+    "override_if_present_present": Scenario(
+        expected={"name": "dev", "search": {"provider": "alpha", "timeout": 20}},
+        expected_dump={
+            "1_raw/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
+            "1_raw/dev.yaml": {"name": "dev", "_mixins": ["timeout_mix"]},
+            "0_mixins/timeout_mix.yaml": {
+                "search": MergeDirective({"timeout": 20}, MergeOperation.OVERRIDE_IF_PRESENT)
+            },
+            "2_configs_with_mixins/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
+            "2_configs_with_mixins/dev.yaml": {"name": "dev"},
+            "3_merged/dev.yaml": {"name": "dev", "search": {"provider": "alpha", "timeout": 20}},
+            "4_final/dev.yaml": {"name": "dev", "search": {"provider": "alpha", "timeout": 20}},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
+    "override_if_present_absent": Scenario(
+        expected={"name": "dev", "cache": {"enabled": True}},
+        expected_dump={
+            "1_raw/dev.yaml": {"name": "dev", "_mixins": ["cache_mix"]},
+            "0_mixins/cache_mix.yaml": {
+                "cache": {
+                    "enabled": True,
+                    "eviction": MergeDirective({"strategy": "lru"}, MergeOperation.OVERRIDE_IF_PRESENT),
+                }
+            },
+            "2_configs_with_mixins/dev.yaml": {"name": "dev", "cache": {"enabled": True}},
+            "3_merged/dev.yaml": {"name": "dev", "cache": {"enabled": True}},
+            "4_final/dev.yaml": {"name": "dev", "cache": {"enabled": True}},
+            "extra_mixins_list.yaml": [],
+        },
+    ),
+    "override_if_present_scalar": Scenario(error=ValueError),
     "mixins_all_levels": Scenario(
         expected={"app": "local-app", "search": {"provider": "gamma", "timeout": 30}},
         config_name="prd",
