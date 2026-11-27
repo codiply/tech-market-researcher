@@ -1,0 +1,15 @@
+supervisor:
+  backend:
+    kind: sandbox
+    # This mixin replaces the filesystem backend, so remove the section set by any layer below.
+    filesystem: !delete
+    sandbox:
+      namespace: default
+      image: python:3.12-slim
+      workdir: /tmp
+      cpu_request: 100m
+      cpu_limit: 1000m
+      memory_request: 256Mi
+      memory_limit: 512Mi
+      startup_timeout_seconds: 120
+      default_exec_timeout_seconds: 1800

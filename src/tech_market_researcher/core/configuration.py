@@ -213,12 +213,83 @@ class CapabilitiesConfig(BasePydanticModel):
     webpage_indexer: WebpageIndexerConfig = Field(default_factory=WebpageIndexerConfig)
 
 
+class FilesystemBackendConfig(BasePydanticModel):
+    """On-disk root for the agent's filesystem tools (virtual mode)."""
+
+    root_dir: Path = AGENT_BACKEND_ROOT_DIR
+
+
+class SandboxBackendConfig(BasePydanticModel):
+    """Kubernetes sandbox backend settings; the sandbox pod runs a slim Python image.
+
+    Requires a reachable cluster via the active kubeconfig.
+    """
+
+    namespace: str = "default"
+    image: str = "python:3.12-slim"
+    # The pod's working directory, where relative paths resolve. The container runs as a
+    # non-root user, so it must be a directory that user can write to: /workspace (the
+    # provider default) is created root-owned and is not writable. /tmp is.
+    workdir: str = "/tmp"
+    cpu_request: str = "100m"
+    cpu_limit: str = "1000m"
+    memory_request: str = "256Mi"
+    memory_limit: str = "512Mi"
+    startup_timeout_seconds: int = 120
+    default_exec_timeout_seconds: int = 1800
+
+
+class AgentBackendKind(str, Enum):
+    """Available agent backends."""
+
+    FILESYSTEM = "filesystem"
+    SANDBOX = "sandbox"
+
+
+# Sections that must not be defined for each backend kind. Every kind in AgentBackendKind must
+# have an entry, so a new kind fails loudly until it is mapped here.
+_AGENT_BACKEND_INACTIVE_SECTIONS: dict[AgentBackendKind, tuple[str, ...]] = {
+    AgentBackendKind.FILESYSTEM: ("sandbox",),
+    AgentBackendKind.SANDBOX: ("filesystem",),
+}
+
+
+class AgentBackendConfig(BasePydanticModel):
+    """Agent backend selection. Omit the section to use the filesystem backend."""
+
+    kind: AgentBackendKind = AgentBackendKind.FILESYSTEM
+    filesystem: FilesystemBackendConfig = Field(default_factory=FilesystemBackendConfig)
+    sandbox: SandboxBackendConfig = Field(default_factory=SandboxBackendConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _check_inactive_sections(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        kind = data.get("kind", AgentBackendKind.FILESYSTEM)
+        if isinstance(kind, str) and not isinstance(kind, AgentBackendKind):
+            try:
+                kind = AgentBackendKind(kind)  # Coerce so valid string values still go through the checks below.
+            except ValueError:
+                return data  # Invalid value; the kind field's enum validation below reports it.
+        if not isinstance(kind, AgentBackendKind):
+            return data  # Not an enum value; the kind field's enum validation below reports it.
+        if kind not in _AGENT_BACKEND_INACTIVE_SECTIONS:
+            msg = f"no inactive sections defined for backend kind {kind}"
+            raise NotImplementedError(msg)
+        for section in _AGENT_BACKEND_INACTIVE_SECTIONS[kind]:
+            if section in data:
+                raise ValueError(f"the {section} section must not be defined when kind is {kind}.")
+        return data
+
+
 class SupervisorConfig(BasePydanticModel):
     """Supervisor agent settings."""
 
     model: ModelConfig
     system_prompt: str
     checkpointer: CheckpointerConfig = Field(default_factory=CheckpointerConfig)
+    backend: AgentBackendConfig = Field(default_factory=AgentBackendConfig)
     skill_bundles: list[SkillBundleConfig] = Field(default_factory=list)
     capabilities: CapabilitiesConfig
 
@@ -300,12 +371,6 @@ class DebugConfig(BasePydanticModel):
     skills: SkillsDebugConfig = Field(default_factory=SkillsDebugConfig)
 
 
-class FilesystemBackendConfig(BasePydanticModel):
-    """On-disk root for the agent's filesystem tools (virtual mode)."""
-
-    root_dir: Path = AGENT_BACKEND_ROOT_DIR
-
-
 class LoggingConfig(BasePydanticModel):
     """Agent file logging settings."""
 
@@ -374,7 +439,6 @@ class ApplicationConfig(BasePydanticModel):
     indexing: IndexingConfig = Field(default_factory=IndexingConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    filesystem_backend: FilesystemBackendConfig = Field(default_factory=FilesystemBackendConfig)
     debug: DebugConfig = Field(default_factory=DebugConfig)
 
     def get_model_connection_details(self, model: ModelConfig) -> ModelConnectionDetails:

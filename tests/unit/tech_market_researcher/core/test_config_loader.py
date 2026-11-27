@@ -374,10 +374,28 @@ SCENARIOS: dict[str, Scenario] = {
             "1_raw/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
             "1_raw/dev.yaml": {"search": {"timeout": MergeDirective(None, MergeOperation.DELETE)}},
             "2_configs_with_mixins/_common.yaml": {"search": {"provider": "alpha", "timeout": 10}},
-            "2_configs_with_mixins/dev.yaml": {"search": {"timeout": None}},
+            "2_configs_with_mixins/dev.yaml": {"search": {}},
             "3_merged/dev.yaml": {"search": {"provider": "alpha"}},
             "4_final/dev.yaml": {"search": {"provider": "alpha"}},
             "extra_mixins_list.yaml": [],
+        },
+    ),
+    "delete_new_subtree": Scenario(
+        expected={"name": "dev", "search": {"provider": "beta", "timeout": 20}},
+        extra_mixins=["new_subtree_mix"],
+        expected_dump={
+            "1_raw/dev.yaml": {"name": "dev"},
+            "2_configs_with_mixins/dev.yaml": {"name": "dev"},
+            "0_mixins/new_subtree_mix.yaml": {
+                "search": {
+                    "provider": "beta",
+                    "timeout": 20,
+                    "tags": MergeDirective(None, MergeOperation.DELETE),
+                }
+            },
+            "3_merged/dev.yaml": {"name": "dev"},
+            "4_final/dev.yaml": {"name": "dev", "search": {"provider": "beta", "timeout": 20}},
+            "extra_mixins_list.yaml": ["new_subtree_mix"],
         },
     ),
     "delete_section": Scenario(

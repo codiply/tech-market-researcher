@@ -18,6 +18,7 @@ dependencies = [
     "gradio~=6.32.0",
     "httpx~=0.28.1",
     "jinja2~=3.1.6",
+    "langchain-kubernetes[raw]~=0.4.0",
     "langchain-openai~=1.8.5",
     "langgraph-checkpoint-postgres~=3.2.1",
     "markdownify~=1.2.4",
@@ -79,4 +80,9 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["arize.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# No py.typed marker.
+module = ["langchain_kubernetes.*"]
 ignore_missing_imports = true

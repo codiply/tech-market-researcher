@@ -1,4 +1,6 @@
-filesystem_backend:
-  # Per-platform backend root, applied on top of the shared evals mixin, so concurrent
-  # MLflow and Phoenix eval runs cannot overwrite each other's files.
-  root_dir: .storage/evals/phoenix/agent/backend
+supervisor:
+  backend:
+    # Per-platform backend root, applied on top of the shared evals mixin, so concurrent
+    # MLflow and Phoenix eval runs cannot overwrite each other's files.
+    filesystem:
+      root_dir: .storage/evals/phoenix/agent/backend

@@ -2516,6 +2516,23 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-kubernetes"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "deepagents" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f3/8a/36bac269e886d257c937f220679205f57c56173d2ba93b4ed18ca7cd5428/langchain_kubernetes-0.4.0.tar.gz", hash = "sha256:5ce1ace10c5ff2019e673541631c10db42f076d203fa097a5350275fad0b88c3", size = 46456, upload-time = "2026-04-01T19:21:36.728Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/da/e19309b97d450d2ab62bc1cd717e551740e8cb1a302204a9e46dae701550/langchain_kubernetes-0.4.0-py3-none-any.whl", hash = "sha256:e407522fe5038aea8b41e5b8f17f8e4bb284fa185cabfa0c8324e1ac12d0207c", size = 48538, upload-time = "2026-04-01T19:21:35.808Z" },
+]
+
+[package.optional-dependencies]
+raw = [
+    { name = "kubernetes" },
+]
+
+[[package]]
 name = "langchain-openai"
 version = "1.8.5"
 source = { registry = "https://pypi.org/simple" }
@@ -5270,6 +5287,7 @@ dependencies = [
     { name = "gradio" },
     { name = "httpx" },
     { name = "jinja2" },
+    { name = "langchain-kubernetes", extra = ["raw"] },
     { name = "langchain-openai" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "markdownify" },
@@ -5309,6 +5327,7 @@ requires-dist = [
     { name = "gradio", specifier = "~=6.32.0" },
     { name = "httpx", specifier = "~=0.28.1" },
     { name = "jinja2", specifier = "~=3.1.6" },
+    { name = "langchain-kubernetes", extras = ["raw"], specifier = "~=0.4.0" },
     { name = "langchain-openai", specifier = "~=1.8.5" },
     { name = "langgraph-checkpoint-postgres", specifier = "~=3.2.1" },
     { name = "markdownify", specifier = "~=1.2.4" },

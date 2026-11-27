@@ -1,0 +1,4 @@
+search:
+  provider: beta
+  timeout: 20
+  tags: !delete

@@ -37,6 +37,7 @@ flowchart LR
     end
 
     agent_fs[".storage/agent/backend<br/>Agent file storage (on-disk)"]
+    minikube["minikube<br/>Kubernetes cluster (sandbox pods)"]
 
     macbook["MacBook (M5 Pro)<br/>OMLX server<br/>e.g. Qwen3.8-27B-oQ4e-mtp"]
     aws["AWS Bedrock<br/>e.g. eu.amazon.nova-2-lite-v1"]
@@ -53,7 +54,8 @@ flowchart LR
     main -->|fetch_page tool| web
     main -->|web page index tools| chroma
     main -->|web page index tools, when run from the evals| chroma_evals
-    main -->|filesystem tools in virtual mode| agent_fs
+    main -->|backend: on-disk filesystem (default)| agent_fs
+    main -->|backend: sandbox, creates & manages pod| minikube
     main -->|embeddings, not via gateway| macbook
     main -->|LLM requests, direct| ec2
     main -->|conversation checkpoints| agent_db
@@ -82,7 +84,7 @@ flowchart LR
     chroma_admin -->|manages| chroma_evals
 ```
 
-- **Agent** — an agent built on [LangChain](https://www.langchain.com) [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent), run interactively from the CLI or from a web UI (a [Gradio](https://gradio.app) app or a [Textual](https://github.com/Textualize/textual) app; see Developer Setup). LLM requests go through the [MLflow](https://mlflow.org) AI Gateway; every run is traced back to MLflow and Phoenix. The conversation state is checkpointed by the LangGraph checkpointer, selected in the agent config: in-memory (per process) or Postgres, stored in a dedicated schema of the agent database so the conversation persists across UI restarts. Filesystem tools are backed by a dedicated on-disk directory in virtual mode, so the agent's file operations are confined to its own storage area (with a cap on the size of individual files it can read).
+- **Agent** — an agent built on [LangChain](https://www.langchain.com) [deepagents](https://github.com/langchain-ai/deepagents) framework (currently just the main/supervisor agent), run interactively from the CLI or from a web UI (a [Gradio](https://gradio.app) app or a [Textual](https://github.com/Textualize/textual) app; see Developer Setup). LLM requests go through the [MLflow](https://mlflow.org) AI Gateway; every run is traced back to MLflow and Phoenix. The conversation state is checkpointed by the LangGraph checkpointer, selected in the agent config: in-memory (per process) or Postgres, stored in a dedicated schema of the agent database so the conversation persists across UI restarts. The backend for the agent's filesystem tools is selected in the agent config: the default is a dedicated on-disk directory in virtual mode, so the agent's file operations are confined to its own storage area (with a cap on the size of individual files it can read). The other option is the sandbox backend, which runs file operations — and shell commands, via the `execute` tool — inside an ephemeral pod in the minikube cluster, created at agent startup through the active kubeconfig and deleted at shutdown; it requires no cluster-side installation.
 - **Evaluations** — the evaluation code runs the agent over an evaluation dataset and scores each record with an LLM judge that also goes through the AI Gateway. Two platforms are supported: **MLflow** (datasets and results live in MLflow) and **Phoenix** (datasets and results are stored as a Phoenix experiment in Phoenix). When the agent is run from the evaluations, its web page index points at the dedicated `chroma_evals` Chroma instance instead of the main one, so evaluation runs do not pollute the agent's own index (see Evals vector store isolation).
 - **MLflow AI Gateway** — proxies OpenAI-compatible requests to either the local [OMLX](https://omlx.ai/) server on the MacBook (default) or [AWS Bedrock](https://aws.amazon.com/bedrock/), and records the agent's traces. It also monitors token usage and cost in real time, and supports budgets that cap spending, so a runaway agent run can't keep consuming tokens and money indefinitely.
 - **Search** — the agent's search tool uses either the local [SearXNG](https://docs.searxng.org/) metasearch backend (which fans out to many public search engines) or the [Tavily](https://tavily.com) API, one or the other. It returns result titles, URLs and snippets only; a separate `fetch_page` tool fetches the content of individual pages (as markdown) when the agent needs it.

@@ -6,8 +6,10 @@ indexing:
   # Tag every collection the agent creates, so the evals cleanup can delete exactly those.
   additional_collection_metadata:
     created_during_evals: "true"
-filesystem_backend:
-  # Keep the agent's on-disk files for eval runs separate from regular agent runs.
-  root_dir: .storage/evals/agent/backend
+supervisor:
+  backend:
+    # Keep the agent's on-disk files for eval runs separate from regular agent runs.
+    filesystem:
+      root_dir: .storage/evals/agent/backend
 logging:
   directory: .storage/evals/agent/logs

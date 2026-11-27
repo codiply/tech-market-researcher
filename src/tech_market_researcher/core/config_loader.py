@@ -209,6 +209,9 @@ def deep_merge(configs: list[dict[str, Any]], list_merge_behaviour: ListMergeBeh
                 value = value.value  # !extend on a non-list: fall back to the default behaviour
             if isinstance(value, dict) and isinstance(existing, dict):
                 merged[key] = deep_merge([existing, value], list_merge_behaviour)
+            elif isinstance(value, dict) and existing is None:
+                # Recurse into a wholly new subtree so merge directives inside it resolve.
+                merged[key] = deep_merge([value], list_merge_behaviour)
             elif (
                 isinstance(value, list)
                 and isinstance(existing, list)

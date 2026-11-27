@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from deepagents import create_deep_agent
-from deepagents.backends import FilesystemBackend
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -14,6 +13,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
 from tech_market_researcher.capabilities.builders import build_middleware_list, build_tool_list
+from tech_market_researcher.core.agent_backend import build_agent_backend
 from tech_market_researcher.core.arguments import AgentCommandLineArguments
 from tech_market_researcher.core.checkpointing import get_checkpointer
 from tech_market_researcher.core.common import (
@@ -24,7 +24,6 @@ from tech_market_researcher.core.common import (
 )
 from tech_market_researcher.core.configuration import ApplicationConfig, load_config
 from tech_market_researcher.core.constants import (
-    AGENT_BACKEND_MAX_FILE_SIZE_MB,
     AGENT_CHECKPOINT_THREAD_ID_KEY,
     AGENT_CHECKPOINT_USER_ID_METADATA_KEY,
 )
@@ -158,11 +157,7 @@ async def create_agent(
     capabilities = config.supervisor.capabilities
     checkpointer_wrapper = await get_checkpointer(config.supervisor.checkpointer)
     checkpointer = checkpointer_wrapper.checkpointer
-    backend = FilesystemBackend(
-        root_dir=config.filesystem_backend.root_dir,
-        virtual_mode=True,
-        max_file_size_mb=AGENT_BACKEND_MAX_FILE_SIZE_MB,
-    )
+    backend, backend_resources = build_agent_backend(config.supervisor.backend)
     skills = materialize_skill_bundles(backend, config.supervisor.skill_bundles)
     agent = create_deep_agent(
         model=model,
@@ -178,5 +173,5 @@ async def create_agent(
     return TechMarketResearcherAgent(
         agent,
         config.environment,
-        async_releasable_resources=(checkpointer_wrapper,),
+        async_releasable_resources=(checkpointer_wrapper, *backend_resources),
     )

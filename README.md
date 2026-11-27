@@ -43,6 +43,21 @@ uv run agent_cli
 
 Starts an interactive chat REPL against the MLflow AI Gateway configured in `.env`. Flags: `--config-name` (name of the config to load; its file `<name>.yaml` is read, default `base`), `--extra-mixin` (alias `--x-mx`; mixin from `config/agent/mixins/` applied on top of the loaded config, repeatable in order, e.g. `--x-mx bedrock-nova-lite`), `--user-id`, `--session-id`, and `--time-zone` (user IANA time zone used by tools that report times, e.g. `Europe/Madrid`).
 
+### Sandbox backend (Kubernetes)
+
+By default, the agent's filesystem tools are backed by an on-disk directory. Selecting the sandbox backend in the agent config instead runs the agent's file operations — and shell commands, which only the sandbox backend exposes — inside a Kubernetes pod:
+
+```yaml
+supervisor:
+  backend:
+    kind: sandbox
+    sandbox:
+      namespace: default
+      image: python:3.12-slim
+```
+
+**No manual setup is needed on the cluster**: the sandbox runs in raw mode, creating and managing its pod directly through the Kubernetes API with the active `kubectl` kubeconfig. No manifests, controllers, or CRDs are installed on the cluster — the only requirement is a running cluster that `kubectl` can reach (minikube). `./stack.sh up` starts minikube if it is not running, and `./stack.sh down` stops it (both are no-ops when minikube is not installed). Each pod comes with a deny-all NetworkPolicy, and both the pod and the policy are deleted automatically when the agent shuts down, so nothing lingers on the cluster.
+
 ### Gradio App
 
 ```bash

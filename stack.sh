@@ -58,6 +58,26 @@ ensure_storage_dirs() {
   done
 }
 
+# Minikube hosts the cluster for the sandbox backend's Kubernetes pods. Only manage
+# it when minikube is installed, so the stack still works on machines without it.
+minikube_is_running() {
+  minikube status 2>/dev/null | grep -q "host: Running"
+}
+
+ensure_minikube() {
+  command -v minikube >/dev/null || return 0
+  minikube_is_running && return 0
+  echo "Starting minikube..."
+  minikube start
+}
+
+stop_minikube() {
+  command -v minikube >/dev/null || return 0
+  minikube_is_running || return 0
+  echo "Stopping minikube..."
+  minikube stop
+}
+
 # Wait for the MLflow server to answer HTTP 200 on /health.
 # (A raw TCP probe is not enough: the port accepts connections before the
 # server is ready to serve them, causing "Connection reset by peer".)
@@ -124,8 +144,14 @@ bootstrap() {
 case "$cmd" in
   up|restart)
     ensure_storage_dirs
+    ensure_minikube
     docker compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" "$cmd" "$@"
     bootstrap
+    exit $?
+    ;;
+  down)
+    docker compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" down "$@"
+    stop_minikube
     exit $?
     ;;
   bootstrap)
