@@ -1,0 +1,17 @@
+- input:
+    messages:
+    - role: user
+      content: >-
+        Compute the SHA-256 hex digest of the following string, using its exact UTF-8
+        encoding as written (including punctuation, with no trailing newline):
+        "A deep agent with a shell is a computer, not a chatbot." In your response, give
+        me only the lowercase hex digest and nothing else.
+  expected_response: "80994217c432c067b2663d1f06b4b713c44ac6f1fa6e2bc1cdb5bd09b3592153"
+  expected_tool_calls:
+  - name: execute
+    arguments:
+      command: >-
+        python3 -c "import hashlib;
+        print(hashlib.sha256('A deep agent with a shell is a computer, not a chatbot.'.encode()).hexdigest())"
+  tags:
+    capability_under_test: execute

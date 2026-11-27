@@ -19,6 +19,10 @@ supervisor:
   model:
     provider: mlflow_gateway
     name: omlx.Qwen3.8-27B-oQ4e-mtp
+  backend:
+    kind: filesystem
+    filesystem:
+      root_dir: .storage/agent/backend
   checkpointer:
     backend: postgres
     postgres:
