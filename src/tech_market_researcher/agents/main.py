@@ -155,23 +155,35 @@ async def create_agent(
         api_key=model_connection.api_key,
     )
     capabilities = config.supervisor.capabilities
-    checkpointer_wrapper = await get_checkpointer(config.supervisor.checkpointer)
-    checkpointer = checkpointer_wrapper.checkpointer
-    backend, backend_resources = build_agent_backend(config.supervisor.backend)
-    skills = materialize_skill_bundles(backend, config.supervisor.skill_bundles)
-    agent = create_deep_agent(
-        model=model,
-        system_prompt=config.supervisor.system_prompt,
-        tools=await build_tool_list(config),
-        middleware=build_middleware_list(capabilities),
-        context_schema=AgentRuntimeContext,
-        checkpointer=checkpointer,
-        skills=skills or None,
-        backend=backend,
-    )
-    write_debug_dumps(config.debug, agent)
+    # Accumulate releasable resources as they are constructed, so that if construction
+    # fails, the caller never receives the agent and whatever was built is released here
+    # (e.g. the sandbox pod) instead of leaking.
+    async_releasable_resources: list[AsyncReleasableResource] = []
+    try:
+        checkpointer_wrapper = await get_checkpointer(config.supervisor.checkpointer)
+        checkpointer = checkpointer_wrapper.checkpointer
+        async_releasable_resources.append(checkpointer_wrapper)
+        backend, backend_resources = build_agent_backend(config.supervisor.backend)
+        async_releasable_resources.extend(backend_resources)
+        skills = materialize_skill_bundles(backend, config.supervisor.skill_bundles)
+        agent = create_deep_agent(
+            model=model,
+            system_prompt=config.supervisor.system_prompt,
+            tools=await build_tool_list(config),
+            middleware=build_middleware_list(capabilities),
+            context_schema=AgentRuntimeContext,
+            checkpointer=checkpointer,
+            skills=skills or None,
+            backend=backend,
+        )
+        write_debug_dumps(config.debug, agent)
+    except BaseException:
+        # The caller never receives the agent, so it cannot release the resources itself.
+        for resource in async_releasable_resources:
+            await resource.close()
+        raise
     return TechMarketResearcherAgent(
         agent,
         config.environment,
-        async_releasable_resources=(checkpointer_wrapper, *backend_resources),
+        async_releasable_resources=tuple(async_releasable_resources),
     )

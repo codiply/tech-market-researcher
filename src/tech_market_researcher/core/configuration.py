@@ -237,6 +237,10 @@ class SandboxBackendConfig(BasePydanticModel):
     memory_limit: str = "512Mi"
     startup_timeout_seconds: int = 120
     default_exec_timeout_seconds: int = 1800
+    # Startup cleanup: sandbox pods with no activity for this long (last execute(), falling back
+    # to creation time) are deleted when the agent is built, so pods left behind by crashed or
+    # terminated runs do not accumulate.
+    pod_max_idle_hours: float = 24.0
 
 
 class AgentBackendKind(str, Enum):

@@ -4,7 +4,9 @@ import base64
 import importlib.metadata
 import logging
 import shlex
+import uuid
 from collections.abc import Sequence
+from datetime import datetime, timedelta, timezone
 
 from deepagents.backends import BackendProtocol, FilesystemBackend
 from deepagents.backends.protocol import ExecuteResponse, FileUploadResponse
@@ -131,6 +133,51 @@ def _build_filesystem_backend(config: FilesystemBackendConfig) -> BackendProtoco
     )
 
 
+def _delete_sandbox_pods_matching(provider: KubernetesProvider, labels: dict[str, str]) -> None:
+    """Best-effort delete of the sandbox pods carrying the given labels.
+
+    Called when sandbox creation fails or is interrupted, so the pod the failed call
+    created is not left behind. The labels are run-unique, so only a pod this run
+    created can match; pods of other running agents are never touched.
+    """
+    try:
+        response = provider.list(labels=labels)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.warning("Failed to list sandbox pods after a failed sandbox creation", exc_info=True)
+        return
+    for sandbox in response.sandboxes:
+        provider.delete(sandbox_id=sandbox.id)
+
+
+def _delete_stale_sandbox_pods(provider: KubernetesProvider, max_idle_hours: float) -> None:
+    """Best-effort delete of managed sandbox pods idle for longer than max_idle_hours.
+
+    Runs at agent startup: a process that crashed or was terminated never releases its sandbox
+    pod, so each start clears out the leftovers of earlier runs. Idle time is measured from
+    the pod's last execute(), falling back to its creation time, so a pod of a still-running
+    agent is only touched once it has been idle for the whole threshold.
+    """
+    try:
+        response = provider.list()
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.warning("Failed to list sandbox pods for the stale pod cleanup", exc_info=True)
+        return
+    now = datetime.now(timezone.utc)
+    deleted = 0
+    for sandbox in response.sandboxes:
+        try:
+            last_activity = datetime.fromisoformat(sandbox.last_activity or sandbox.created_at)
+            idle_duration = now - last_activity
+        except TypeError, ValueError:
+            continue  # No usable timestamp; skip rather than risk deleting an active pod.
+        if idle_duration <= timedelta(hours=max_idle_hours):
+            continue
+        provider.delete(sandbox_id=sandbox.id)
+        deleted += 1
+    if deleted:
+        logger.info("Deleted %d sandbox pod(s) idle for more than %dh", deleted, max_idle_hours)
+
+
 def _build_sandbox_backend(
     sandbox_config: SandboxBackendConfig,
 ) -> tuple[BackendProtocol, Sequence[AsyncReleasableResource]]:
@@ -153,9 +200,22 @@ def _build_sandbox_backend(
             memory_limit=sandbox_config.memory_limit,
             startup_timeout_seconds=sandbox_config.startup_timeout_seconds,
             default_exec_timeout=sandbox_config.default_exec_timeout_seconds,
+            # Records the pod's last execute() as an annotation, which the startup cleanup uses
+            # to judge staleness; the provider itself does not enforce the TTL.
+            ttl_idle_seconds=int(sandbox_config.pod_max_idle_hours * 3600),
         )
     )
-    kubernetes_sandbox = provider.get_or_create()
+    # Each start clears out sandbox pods left behind by earlier runs that crashed or were terminated.
+    _delete_stale_sandbox_pods(provider, sandbox_config.pod_max_idle_hours)
+    # The pod is labelled with a run-unique id, so if creation fails or is interrupted after the
+    # pod exists, exactly the pod this run created can be found and deleted without touching
+    # pods of other running agents.
+    run_labels = {"run-id": uuid.uuid4().hex}
+    try:
+        kubernetes_sandbox = provider.get_or_create(labels=run_labels)
+    except BaseException:
+        _delete_sandbox_pods_matching(provider, run_labels)
+        raise
     logger.info("Kubernetes sandbox ready: id=%s", kubernetes_sandbox.id)
     # The provider's sandbox is just a wrapper around its execution backend; reuse it to avoid
     # a second connection.

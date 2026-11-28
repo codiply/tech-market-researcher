@@ -13,7 +13,7 @@ load_dotenv()
 # pylint: disable=wrong-import-position
 from rich.console import Console
 
-from tech_market_researcher.agents.main import create_agent
+from tech_market_researcher.agents.main import TechMarketResearcherAgent, create_agent
 from tech_market_researcher.core.arguments import CliCommandLineArguments, get_args
 from tech_market_researcher.core.common import AgentRuntimeContext
 
@@ -26,14 +26,20 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     """Run the interactive chat REPL against the configured gateway endpoint."""
     args = get_args(CliCommandLineArguments)
+
+    async def chat() -> None:
+        # Exiting the context releases the agent's async resources (e.g. deletes the sandbox pod),
+        # even on Ctrl-C or errors.
+        async with await create_agent(args) as agent:
+            await _repl(agent, args)
+
     # One event loop for the whole REPL: the agent's async model client caches its
     # connection pool on the loop it first runs on, so a fresh loop per turn breaks it.
-    asyncio.run(_chat(args))
+    asyncio.run(chat())
 
 
-async def _chat(args: CliCommandLineArguments) -> None:
-    """Run the interactive chat REPL on a single event loop."""
-    agent = await create_agent(args)
+async def _repl(agent: TechMarketResearcherAgent, args: CliCommandLineArguments) -> None:
+    """Run the chat REPL loop until the user quits."""
     context = AgentRuntimeContext(user_id=args.user_id, session_id=args.session_id, time_zone=args.time_zone)
     logger.info(
         "Starting chat REPL: user_id=%s, session_id=%s, time_zone=%s",

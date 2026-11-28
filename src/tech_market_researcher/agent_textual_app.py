@@ -1,6 +1,8 @@
 """Textual web app for chatting with the agent, served in the browser via textual-serve."""
 
 import asyncio
+import atexit
+import logging
 import shlex
 import sys
 import threading
@@ -34,6 +36,8 @@ from tech_market_researcher.core.environment import TAILSCALE_HOST_NAME
 # pylint: enable=wrong-import-position
 
 TEXTUAL_APP_PORT = 8898
+
+logger = logging.getLogger(__name__)
 
 
 class HostAwareServer(Server):
@@ -149,6 +153,10 @@ class ChatApp(App):
             user_id=DEFAULT_USER_ID, session_id=self._default_session_id, time_zone=DEFAULT_TIME_ZONE
         )
         self._busy = False
+        # Release the agent when the process exits: the atexit hook fires on every exit path
+        # while the agent loop is still alive; the startup cleanup covers processes that
+        # never reach the hook.
+        atexit.register(self._release_agent)
         # One event loop for the life of the app, owned by a dedicated thread: the agent's
         # async model client caches its connection pool on the loop it first runs on, so
         # every agent call must share this loop.
@@ -185,6 +193,18 @@ class ChatApp(App):
         self._agent = self._run_on_agent_loop(create_agent(self._args))
         self.query_one("#message", Input).focus()
         self._refresh_messages(self._run_on_agent_loop(self._agent.get_messages(self.runtime_context)))
+
+    def _release_agent(self) -> None:
+        """Release the agent on process exit, deleting its sandbox pod. Runs from atexit."""
+        if self._agent is None:
+            return  # on_mount failed before the agent was built; nothing to release.
+        agent = self._agent
+        self._agent = None  # Guard against a double release.
+        try:
+            self._run_on_agent_loop(agent.close())
+            logger.info("Agent released on exit")
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.warning("Failed to release the agent on exit", exc_info=True)
 
     def _message_input(self) -> Input:
         """The composer input."""

@@ -1,5 +1,8 @@
 """Gradio app for chatting with the agent."""
 
+import asyncio
+import logging
+import signal
 from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
@@ -21,6 +24,8 @@ from tech_market_researcher.core.common import AgentRuntimeContext, BasePydantic
 from tech_market_researcher.core.constants import DEFAULT_TIME_ZONE, DEFAULT_USER_ID
 
 # pylint: enable=wrong-import-position
+
+logger = logging.getLogger(__name__)
 
 GRADIO_APP_PORT = 8899
 
@@ -117,13 +122,31 @@ def main() -> None:
     session_id = str(uuid4())
     context = ChatBotContext(user_id=DEFAULT_USER_ID, session_id=session_id, time_zone=DEFAULT_TIME_ZONE)
     agent: TechMarketResearcherAgent | None = None
+    agent_loop: asyncio.AbstractEventLoop | None = None
 
     async def _get_agent() -> TechMarketResearcherAgent:
         """Create the agent lazily, on the event loop the handlers run on."""
-        nonlocal agent
+        nonlocal agent, agent_loop
         if agent is None:
             agent = await create_agent(args)
+            agent_loop = asyncio.get_running_loop()
         return agent
+
+    def _shutdown(signum: int, _frame: object) -> None:
+        """Release the agent (deleting its sandbox pod), then tear down the server.
+
+        Runs in the main thread while the server is still up, so the handler loop the
+        agent's async resources bind to is still alive and can run the close.
+        """
+        if agent is not None and agent_loop is not None and not agent_loop.is_closed():
+            try:
+                asyncio.run_coroutine_threadsafe(agent.close(), agent_loop).result(timeout=60)
+                logger.info("Agent released on shutdown")
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to release the agent on shutdown", exc_info=True)
+        # A second signal force-terminates instead of re-entering this handler mid-cleanup.
+        signal.signal(signum, signal.SIG_DFL)
+        raise KeyboardInterrupt
 
     async def load_chatbot() -> tuple[list[dict[str, str]], str, str, str, dict[str, Any]]:
         """Restore the conversation persisted in the checkpointer, if any.
@@ -166,6 +189,11 @@ def main() -> None:
         return _to_chat_items(result["messages"]), "", gr.update(interactive=False)
 
     demo = _build_ui(session_id, respond, update_submit_button, apply_context, load_chatbot)
+
+    # Release the agent when the process is interrupted; blocking launch() only returns
+    # on shutdown, and there is no in-app hook to close from, so clean up on the signal.
+    signal.signal(signal.SIGINT, _shutdown)
+    signal.signal(signal.SIGTERM, _shutdown)
 
     demo.queue().launch(
         server_name="0.0.0.0",
